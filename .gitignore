@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ROS build artifacts
+devel/
+install/
+log/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Archives
+*.zip
+*.tar.gz
+
+# Extracted files
+files/
+
+# Skills not yet included
+skills/robotics-data-pipelines/

@@ -12,6 +12,9 @@ A curated collection of SKILL.md files for AI agents working on robotics softwar
 | **[robotics-design-patterns/](skills/robotics-design-patterns/SKILL.md)** | Architecture Patterns | Behavior trees, FSMs, HAL, safety systems, sensor fusion, sim-to-real |
 | **[robot-perception/](skills/robot-perception/SKILL.md)** | Perception Systems | Cameras, LiDAR, depth, calibration, point clouds, detection, tracking, sensor fusion |
 | **[robotics-testing/](skills/robotics-testing/SKILL.md)** | Testing Strategies | pytest + ROS, launch_testing, mock hardware, golden files, CI/CD |
+| **[docker-ros2-development/](skills/docker-ros2-development/SKILL.md)** | Docker + ROS2 | Multi-stage Dockerfiles, docker-compose, DDS across containers, GPU passthrough, devcontainers |
+| **[ros2-web-integration/](skills/ros2-web-integration/SKILL.md)** | Web Integration | rosbridge, FastAPI/Flask bridges, WebSocket streaming, REST APIs, MJPEG/WebRTC, security |
+| **[robot-bringup/](skills/robot-bringup/SKILL.md)** | System Bringup | systemd services, launch composition, udev rules, watchdogs, log rotation, graceful shutdown |
 
 ## How Agents Use These Skills
 
@@ -30,6 +33,9 @@ def load_skill(task_description: str) -> str:
         'design': 'skills/robotics-design-patterns/SKILL.md',
         'perception': 'skills/robot-perception/SKILL.md',
         'testing': 'skills/robotics-testing/SKILL.md',
+        'docker': 'skills/docker-ros2-development/SKILL.md',
+        'web': 'skills/ros2-web-integration/SKILL.md',
+        'bringup': 'skills/robot-bringup/SKILL.md',
     }
     # Match task to skill and inject into context
     for key, path in skills.items():
@@ -87,6 +93,9 @@ Robot System Architecture
 ├── Control ────────────── robotics-design-patterns/ (control loops)
 ├── Safety ─────────────── robotics-design-patterns/ (watchdogs, limits)
 ├── Testing ────────────── robotics-testing/ (unit, integration, sim)
+├── Containerization ───── docker-ros2-development/ (Dockerfiles, compose, DDS, GPU)
+├── Web Interfaces ─────── ros2-web-integration/ (REST, WebSocket, streaming, dashboards)
+├── System Bringup ─────── robot-bringup/ (systemd, udev, watchdogs, boot sequence)
 └── Deployment ─────────── ros2/ (production checklist, CI/CD)
 ```
 
@@ -98,4 +107,3 @@ Future skills to consider:
 - `robot-manipulation/` — Grasping, motion planning, force control
 - `robot-navigation/` — Nav2, SLAM, path planning, localization
 - `robot-learning/` — Imitation learning, RL, VLA model fine-tuning
-- `robot-deployment/` — Docker, Kubernetes, fleet management, OTA updates

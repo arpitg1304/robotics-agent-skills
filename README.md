@@ -121,6 +121,12 @@ Robot System Architecture
 Future skills to consider:
 - `robotics-data-pipelines/` — RLDS, LeRobot, Zarr, format conversion, asymmetric I/O, curation
 - `robot-simulation/` — MuJoCo, Isaac Sim, Gazebo setup and best practices
-- `robot-manipulation/` — Grasping, motion planning, force control
-- `robot-navigation/` — Nav2, SLAM, path planning, localization
-- `robot-learning/` — Imitation learning, RL, VLA model fine-tuning
+- `robot-manipulation/` — MoveIt2, grasp planning, force/torque control, pick-and-place pipelines
+- `robot-navigation/` — Nav2, SLAM, path planning, costmaps, localization
+- `robot-learning/` — Imitation learning, RL, VLA model fine-tuning, policy deployment
+- `ros2-control/` — ros2_control framework, hardware interfaces, controllers, PID tuning, real-time
+- `robot-description/` — URDF, Xacro, joint types, inertials, collision meshes, SDF, robot_state_publisher
+- `robot-hardware-interfaces/` — Serial (UART, RS485), CAN bus, EtherCAT, GPIO, I2C/SPI, custom drivers
+- `tf2-transforms/` — Coordinate frames, static vs dynamic transforms, frame conventions, time travel, debugging
+- `multi-robot-systems/` — Fleet management, namespacing, multi-robot coordination, task allocation, DDS partitions
+- `robot-debugging/` — ros2 doctor, rqt, tracing, CPU/memory profiling, bag recording and replay, diagnostics

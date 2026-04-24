@@ -1,19 +1,6 @@
 ---
 name: robot-bringup
-description: >
-  Patterns and best practices for bringing up a complete ROS2-based robotics system on a robot's
-  onboard computer, including systemd services, launch file composition, ordered startup, and
-  production monitoring. Use this skill when configuring a robot to start ROS2 nodes on boot,
-  writing systemd unit files for ROS2 launch, composing layered launch files for full robot stacks,
-  setting up watchdog monitoring, configuring udev rules for deterministic device naming, or
-  debugging boot-time race conditions. Trigger whenever the user mentions robot bringup, robot
-  startup, systemd for ROS2, ROS2 on boot, launch file composition, robot boot sequence, udev
-  rules for cameras or serial ports, watchdog for robot systems, automatic restart for ROS2 nodes,
-  network configuration for multi-machine ROS2, log rotation for robots, graceful shutdown of
-  robot stacks, or SSH-based remote debugging of robots. Also trigger for environment setup in
-  systemd (sourcing workspaces), ordered startup with health checks, deterministic device naming,
-  or any discussion of running ROS2 systems as long-running production services. Covers systemd
-  on Ubuntu 22.04/24.04 with ROS2 Humble, Iron, and Jazzy.
+description: "Brings up complete ROS2 systems on robot onboard computers with systemd services, launch file composition, ordered startup, and production monitoring. Use this skill when configuring ROS2 to start on boot, writing systemd unit files, composing layered launch files, setting up watchdog monitoring, writing udev rules for deterministic device naming, or debugging boot-time race conditions. Trigger whenever the user mentions robot bringup, systemd for ROS2, ROS2 on boot, launch file composition, udev rules, watchdog for robots, automatic restart for ROS2 nodes, multi-machine ROS2 networking, log rotation, graceful shutdown, or SSH robot debugging. Also trigger for ordered startup with health checks or running ROS2 as production services. Covers Ubuntu 22.04/24.04 with ROS2 Humble, Iron, and Jazzy."
 ---
 
 # Robot Bringup Skill

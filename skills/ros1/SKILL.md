@@ -1,5 +1,5 @@
 ---
-name: ros1-development
+name: ros1
 description: >
   Best practices, design patterns, and common pitfalls for ROS1 (Robot Operating System 1) development.
   Use this skill when building ROS1 nodes, packages, launch files, or debugging ROS1 systems. Trigger

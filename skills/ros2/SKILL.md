@@ -1,5 +1,5 @@
 ---
-name: ros2-development
+name: ros2
 description: >
   Comprehensive best practices, design patterns, and common pitfalls for ROS2 (Robot Operating System 2)
   development. Use this skill when building ROS2 nodes, packages, launch files, components, or debugging

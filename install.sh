@@ -74,6 +74,11 @@ fi
 mkdir -p "${target}"
 
 for skill in "${requested_skills[@]}"; do
+  if [[ ! "${skill}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    echo "Invalid skill name: ${skill}" >&2
+    exit 1
+  fi
+
   src="${skills_dir}/${skill}"
   if [[ ! -d "${src}" ]]; then
     echo "Unknown skill: ${skill}" >&2

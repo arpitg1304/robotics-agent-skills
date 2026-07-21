@@ -2,9 +2,10 @@
 
 Production-grade robotics knowledge for AI coding agents.
 
-Drop these `SKILL.md` files into Claude Code, Cursor, Copilot-style agents, or custom
-agent frameworks to make them generate better ROS1/ROS2 software: safer nodes, correct
-QoS, lifecycle patterns, tests, launch files, Docker, bringup, perception, and security.
+Drop these `SKILL.md` files into Claude Code, Autohand Code, Cursor, Copilot-style
+agents, or custom agent frameworks to make them generate better ROS1/ROS2 software:
+safer nodes, correct QoS, lifecycle patterns, tests, launch files, Docker, bringup,
+perception, and security.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 ![Skills](https://img.shields.io/badge/skills-10-green)
@@ -46,6 +47,12 @@ cd robotics-agent-skills
 ./install.sh --target /path/to/your/robot/.claude/skills --skills ros2 robotics-testing robot-bringup
 ```
 
+For Autohand Code project skills:
+
+```bash
+./install.sh --target /path/to/your/robot/.autohand/skills --skills ros2 robotics-testing robot-bringup
+```
+
 Or copy manually:
 
 ```bash
@@ -85,6 +92,12 @@ cp -R skills/robotics-testing /path/to/your/robot/.claude/skills/
 Copy or symlink the skills you need into your project's `.claude/skills/` directory.
 Claude Code auto-discovers `SKILL.md` files and triggers them based on the YAML
 `description` field.
+
+### Autohand Code
+
+Copy or symlink the skills you need into your project's `.autohand/skills/`
+directory. User-level skills live under `~/.autohand/skills/`; project-level
+skills live under `<project>/.autohand/skills/`.
 
 ### Claude Projects
 

@@ -13,7 +13,7 @@ demonstration episodes during teleoperation. (See [PROMPT.md](PROMPT.md) for ful
 | `with-skills/` | All 5 skills as raw context, no extra instructions | [PROMPT.md](PROMPT.md) + [AGENT_PROMPT.md](AGENT_PROMPT.md) |
 
 Both runs received the **same task prompt**. The only difference is whether the 5 skill
-files (ros2-development, robot-perception, robotics-design-patterns,
+files (ros2, robot-perception, robotics-design-patterns,
 robotics-software-principles, robotics-testing) were loaded as context. The agent was
 given no explicit design instructions — it had to independently decide which patterns
 from the skills to apply.
@@ -582,13 +582,13 @@ patterns to use. It independently identified and applied every relevant pattern:
 
 | Pattern Applied | Source Skill |
 |----------------|-------------|
-| Lifecycle node (on_configure/activate/deactivate/cleanup/shutdown) | ros2-development |
-| QoS profiles (BEST_EFFORT for sensors, RELIABLE for status) | ros2-development |
-| ParameterDescriptor with FloatingPointRange/IntegerRange | ros2-development |
-| Runtime parameter change callback | ros2-development |
-| ament_cmake + rosidl for custom msgs | ros2-development |
-| Launch arguments + auto-lifecycle orchestration | ros2-development |
-| MultiThreadedExecutor with callback groups | ros2-development |
+| Lifecycle node (on_configure/activate/deactivate/cleanup/shutdown) | ros2 |
+| QoS profiles (BEST_EFFORT for sensors, RELIABLE for status) | ros2 |
+| ParameterDescriptor with FloatingPointRange/IntegerRange | ros2 |
+| Runtime parameter change callback | ros2 |
+| ament_cmake + rosidl for custom msgs | ros2 |
+| Launch arguments + auto-lifecycle orchestration | ros2 |
+| MultiThreadedExecutor with callback groups | ros2 |
 | Threaded bounded sensor buffers (SensorBuffer class) | robot-perception |
 | Software timestamp synchronization with configurable threshold | robot-perception |
 | Sensor health watchdog with timeout detection | robot-perception |
@@ -608,15 +608,59 @@ patterns to use. It independently identified and applied every relevant pattern:
 
 ---
 
+## Known Defects in the Generated Artifacts
+
+Both packages are **verbatim agent output**, kept unmodified so the comparison stays
+honest. Neither has been built against a real ROS2 distribution, and a review found
+build defects in both. They are recorded here rather than patched, because editing the
+artifacts would destroy their value as evidence.
+
+| Defect | Run | Effect |
+|--------|-----|--------|
+| `CMakeLists.txt` generates interfaces but never calls `ament_python_install_package` or installs the node | without-skills | Nothing is installed; `ros2 run demo_recorder demo_recorder_node` and the launch file both fail |
+| `install(PROGRAMS demo_recorder/demo_recorder_node.py DESTINATION lib/${PROJECT_NAME})` has no `RENAME`, so the executable is named `demo_recorder_node.py` | with-skills | The launch file requests `executable="demo_recorder_node"` and fails to resolve it |
+| `setup.py` ships alongside `<build_type>ament_cmake</build_type>` | both | Dead file — never invoked by the ament_cmake build; the install rules in `CMakeLists.txt` are what count |
+
+The with-skills defect is a one-line fix (`RENAME demo_recorder_node`); the
+without-skills package needs install rules written from scratch. That difference is
+itself a data point, but neither package should be copied as-is.
+
+**What this means for the metrics:** the table above measures the *design decisions* in
+the generated code — lifecycle transitions, QoS selection, buffering, test coverage. It
+does not measure whether the code runs, because neither run was build-verified.
+
+---
+
+## Methodology Caveats
+
+Read the numbers with these limits in mind:
+
+- **n=1.** One prompt, one task, one model, one run per arm. No repeated sampling, so
+  run-to-run variance is unmeasured and the deltas below are not significance-tested.
+- **Self-assessed.** The comparison was written by the same system that produced the
+  artifacts. No independent robotics reviewer graded either package.
+- **Line counts are a proxy, not a result.** "6.3x total lines" measures volume, and
+  volume is the axis a language model inflates for free. 2,107 lines for an episode
+  recorder is arguably over-engineered for some deployments. The defensible claims are
+  the categorical ones: lifecycle transitions present vs. absent, sensor QoS chosen
+  deliberately vs. left at default, 601 lines of tests vs. zero.
+- **Not build-verified.** See the defects above.
+
+Adding a build-verified, multi-run eval across several task prompts is the highest-value
+improvement to this directory. See [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+---
+
 ## Conclusion
 
-The **without-skills** version is a functional but naive implementation — it would work in a
-demo but would fail in production due to QoS mismatches, no sensor health monitoring, no
-graceful degradation, and no tests.
+The **without-skills** version is a naive implementation. Beyond its missing install
+rules, it would fail in production due to QoS mismatches, no sensor health monitoring,
+no graceful degradation, and no tests.
 
 The **with-skills** version applies production robotics patterns throughout. The agent was
 not told which patterns to use — it read the skills, recognized which ones were relevant
-to the task, and applied them independently. The result is code that a senior robotics
-engineer would recognize as production-ready.
+to the task, and applied them independently. The result is a design a senior robotics
+engineer would recognize as production-shaped — though, as noted above, it still needs a
+build fix before it runs.
 
 **The skills didn't make the agent more capable — they made it more experienced.**

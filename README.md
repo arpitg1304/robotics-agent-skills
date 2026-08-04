@@ -35,6 +35,11 @@ once with the robotics skills loaded as context.
 | Structure | Single node module | Separate writer module and cleaner responsibilities |
 | Config surface | 4 parameters | 13 parameters |
 
+This is a single-task, single-run comparison, self-assessed, and neither package was
+built against a real ROS2 distribution — treat it as an illustration of the design
+decisions the skills push toward, not as a benchmark. Caveats and the known build
+defects in both artifacts are documented in the report.
+
 Full report: [evals/EVAL_REPORT.md](evals/EVAL_REPORT.md)
 
 ## Quick Start

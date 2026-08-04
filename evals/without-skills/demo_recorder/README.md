@@ -1,5 +1,10 @@
 # Demo Recorder
 
+> **Eval artifact — not build-verified.** This is verbatim agent output kept unmodified
+> as evidence for [EVAL_REPORT.md](../../EVAL_REPORT.md). Its `CMakeLists.txt` never
+> installs the Python package or the node, so the build instructions below do not
+> produce a runnable package. Read it as a baseline, not as a package to copy.
+
 A ROS2 Python package for recording robot demonstration episodes during teleoperation.
 
 ## Overview

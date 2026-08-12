@@ -96,7 +96,9 @@ for skill in "${requested_skills[@]}"; do
     exit 1
   fi
 
-  rm -rf "${target}/${skill}"
+  # ${target:?} so an empty target can never make this `rm -rf /${skill}`.
+  # ${skill} is already constrained to [A-Za-z0-9_-] above.
+  rm -rf "${target:?}/${skill}"
   cp -R "${src}" "${target}/${skill}"
   echo "Installed ${skill} -> ${target}/${skill}"
 done

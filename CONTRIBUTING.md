@@ -11,6 +11,7 @@ real failure modes from robot software.
 - Add a production checklist to a skill.
 - Add a small, realistic code example.
 - Improve the eval prompts or add another before/after eval.
+- Make an eval build-verified: get a generated package to `colcon build` and record how.
 - Start one of the roadmap skills from the README.
 
 ## Skill Structure
@@ -37,10 +38,28 @@ Then include:
 - Testing and debugging notes.
 - Production checklist.
 
+The `name` **must** match the skill's directory name exactly, and `description` must stay
+under 1024 characters — agents will not load a skill that violates either constraint.
+
+## Validating Your Change
+
+```bash
+python3 scripts/validate_skills.py   # frontmatter, name/directory match, README links
+bash -n install.sh                   # installer syntax
+```
+
+Both run in CI on every pull request, along with an `install.sh` smoke test on Linux and
+macOS. The validator needs no dependencies beyond Python 3.
+
+It also warns when a `SKILL.md` exceeds 1,000 lines. That is a budget, not an error: past
+that size a skill costs a lot of context every time it triggers, and the detail is better
+placed in a `references/` file the agent loads only when it needs it.
+
 ## Review Checklist
 
 Before opening a PR:
 
+- `python3 scripts/validate_skills.py` passes.
 - The skill has specific trigger language in `description`.
 - Examples use realistic ROS names, QoS settings, parameters, and launch patterns.
 - Advice distinguishes simulation, development, and production when it matters.

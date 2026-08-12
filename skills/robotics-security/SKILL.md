@@ -120,7 +120,7 @@ ros2 security create_enclave ${ROS_SECURITY_KEYSTORE} /my_robot/teleop
     <grant name="/my_robot/motor_controller">
       <subject_name>CN=/my_robot/motor_controller</subject_name>
       <validity><not_before>2024-01-01T00:00:00</not_before>
-                <not_after>2026-01-01T00:00:00</not_after></validity>
+                <not_after>2035-01-01T00:00:00</not_after></validity>
       <allow_rule>
         <domains><id>0</id></domains>
         <publish><topics><topic>rt/joint_states</topic></topics></publish>
@@ -131,7 +131,7 @@ ros2 security create_enclave ${ROS_SECURITY_KEYSTORE} /my_robot/teleop
     <grant name="/my_robot/teleop">
       <subject_name>CN=/my_robot/teleop</subject_name>
       <validity><not_before>2024-01-01T00:00:00</not_before>
-                <not_after>2026-01-01T00:00:00</not_after></validity>
+                <not_after>2035-01-01T00:00:00</not_after></validity>
       <allow_rule>
         <domains><id>0</id></domains>
         <publish><topics><topic>rt/cmd_vel</topic></topics></publish>
@@ -142,6 +142,12 @@ ros2 security create_enclave ${ROS_SECURITY_KEYSTORE} /my_robot/teleop
   </permissions>
 </dds>
 ```
+
+**Expiry is a silent outage.** Once `not_after` passes, every participant using that
+grant is rejected at discovery time. Under `ROS_SECURITY_STRATEGY=Enforce` the robot
+comes up with nodes that never see each other, and the only clue is a discovery-time
+rejection in the DDS log -- no topic error, no crash. Track permissions expiry the way
+you track TLS certs: alert well before the date, and rehearse the reissue procedure.
 
 ### Enabling Security in Launch Files
 

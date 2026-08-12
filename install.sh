@@ -24,8 +24,13 @@ target=""
 declare -a requested_skills=()
 declare -a default_skills=(ros2 robotics-software-principles robotics-testing robot-bringup)
 
+# Globbing rather than `find -printf`: BSD find (macOS) has no -printf.
 list_skills() {
-  find "${skills_dir}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+  local path
+  for path in "${skills_dir}"/*/; do
+    [[ -d "${path}" ]] || continue
+    basename "${path}"
+  done | sort
 }
 
 while [[ $# -gt 0 ]]; do
@@ -67,8 +72,12 @@ if [[ ${#requested_skills[@]} -eq 0 ]]; then
   requested_skills=("${default_skills[@]}")
 fi
 
+# Read loop rather than `mapfile`: macOS ships bash 3.2, which has no mapfile.
 if [[ ${#requested_skills[@]} -eq 1 && "${requested_skills[0]}" == "all" ]]; then
-  mapfile -t requested_skills < <(list_skills)
+  requested_skills=()
+  while IFS= read -r skill; do
+    requested_skills+=("${skill}")
+  done < <(list_skills)
 fi
 
 mkdir -p "${target}"
@@ -87,7 +96,9 @@ for skill in "${requested_skills[@]}"; do
     exit 1
   fi
 
-  rm -rf "${target}/${skill}"
+  # ${target:?} so an empty target can never make this `rm -rf /${skill}`.
+  # ${skill} is already constrained to [A-Za-z0-9_-] above.
+  rm -rf "${target:?}/${skill}"
   cp -R "${src}" "${target}/${skill}"
   echo "Installed ${skill} -> ${target}/${skill}"
 done

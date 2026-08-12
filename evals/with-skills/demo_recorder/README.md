@@ -1,5 +1,11 @@
 # demo_recorder
 
+> **Eval artifact — not build-verified.** This is verbatim agent output kept unmodified
+> as evidence for [EVAL_REPORT.md](../../EVAL_REPORT.md). It has a known build defect:
+> `install(PROGRAMS ...)` in `CMakeLists.txt` lacks `RENAME demo_recorder_node`, so the
+> installed executable is `demo_recorder_node.py` and the launch file cannot resolve it.
+> Read it for the patterns, not as a package to copy.
+
 A production-grade ROS2 package for recording robot demonstration episodes
 during teleoperation.  Designed for a 7-DOF Franka Emika Panda arm with a
 wrist-mounted Intel RealSense camera.

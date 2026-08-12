@@ -1,0 +1,70 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  skills:
+    name: Skill frontmatter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate SKILL.md frontmatter
+        run: python3 scripts/validate_skills.py
+
+  installer:
+    name: install.sh
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS covers BSD userland and bash 3.2, where GNU-only builtins break.
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check
+        run: bash -n install.sh
+      - name: shellcheck
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck install.sh
+      - name: Smoke test with the system shell
+        run: |
+          set -euo pipefail
+          /bin/bash install.sh --list
+          /bin/bash install.sh --target "${RUNNER_TEMP}/all" --skills all
+          /bin/bash install.sh --target "${RUNNER_TEMP}/bundle"
+          /bin/bash install.sh --target "${RUNNER_TEMP}/sel" --skills ros2 robotics-testing
+          test -f "${RUNNER_TEMP}/sel/ros2/SKILL.md"
+          expected=$(/bin/bash install.sh --list | wc -l)
+          actual=$(ls "${RUNNER_TEMP}/all" | wc -l)
+          test "${expected}" -eq "${actual}"
+      - name: Reject unknown and traversing skill names
+        run: |
+          set -uo pipefail
+          # A traversing name reaches `rm -rf "${target}/${skill}"`, so it must be
+          # rejected by name before any filesystem operation runs.
+          for bad in does-not-exist ../evals ../../skills /etc "skills;rm"; do
+            if /bin/bash install.sh --target "${RUNNER_TEMP}/bad" --skills "${bad}"; then
+              echo "install.sh accepted the rejected skill name: ${bad}" >&2
+              exit 1
+            fi
+          done
+          test ! -e "${RUNNER_TEMP}/bad/evals"
+
+  evals:
+    name: Eval packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Byte-compile eval sources
+        run: python3 -m compileall -q evals

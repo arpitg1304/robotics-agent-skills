@@ -42,26 +42,30 @@ policies (`lerobot`, `imitation-learning`).
 
 ## Ecosystem Map
 
-| Component | Package / import | Status (2026-11-18) | Use it for |
-|---|---|---|---|
-| MuJoCo core | `pip install mujoco` (4.0.1), `import mujoco` | C engine + official bindings. Since 4.0 `mujoco` is a metapackage: `mujoco-core` (numpy only) + `mujoco-studio` + `glfw`/`pyopengl`. Python >= 3.11 | Single-env sim, control, MPC, teleop, rendering, data generation |
-| Headless core | `pip install mujoco-core` (`[rendering]` for classic GL) | Same bindings, no Studio | Servers, RL workers, containers |
-| CPU batch | `from mujoco import batch, rollout` | Multi-threaded, GIL released, float64, all solvers/plugins | Thousands of CPU rollouts, per-sim model fields, sysid |
-| MJX | `pip install mujoco-mjx`, `from mujoco import mjx` | Two implementations: `impl="jax"` (default; any XLA device; differentiable) and `impl="warp"` (NVIDIA; not differentiable) | JAX pipelines, gradients through physics |
-| MuJoCo Warp | `pip install mujoco-warp`, `import mujoco_warp as mjw` | NVIDIA GPU (CPU device for debugging). Maintained by Google DeepMind + NVIDIA as part of Newton. Not differentiable | Highest-throughput GPU batches, PyTorch training |
-| MuJoCo Playground | `pip install playground` (1.0.1) | Rewritten as **PyTorch** tasks on `reaf-sim` + MuJoCo Warp, RSL-RL training, real-robot deploy (SO-101, YAM, Trossen WXAI, G1). The original JAX/MJX envs live in the repo's `rss2025/` directory | Ready-made envs, sysid and deploy examples |
-| Menagerie | git clone, or `pip install mujoco-menagerie` (`import mujoco_menagerie as mm`) | Curated MJCF robots | Starting models; never hand-write a common arm |
-| dm_control | `pip install dm_control` (1.0.52 requires `mujoco>=4.0.1`) | Maintained; Control Suite + PyMJCF | Existing dm_control code. For new procedural models use `mujoco.MjSpec`, not PyMJCF |
-| Gymnasium | `pip install "gymnasium[mujoco]"` (1.4.0) | `*-v5` envs run on MuJoCo 4.0.1; `-v2`/`-v3` IDs raise a mujoco-py error | Classic locomotion benchmarks |
-| Viewers | `mujoco.viewer` (managed/passive), MuJoCo Studio (`python -m mujoco.studio.viewer --model=x.xml`, `--gfx=web`), live.mujoco.org | Studio is the successor of `simulate`; `mujoco.viewer` still ships | Interactive debugging |
+Full component table and Menagerie model list: `references/ecosystem.md`.
 
-Menagerie arms relevant to low-cost manipulation (directory / main file):
-`robotstudio_so101/so101.xml` (SO-101, 6 position actuators, `scene.xml`, `scene_box.xml`),
-`trs_so_arm100/so_arm100.xml` (SO-ARM100 5-DoF), `low_cost_robot_arm/`, `i2rt_yam/`,
-`trossen_wxai/`, `trossen_vx300s/`, `trossen_wx250s/`, `aloha/`, `agilex_piper/`,
-`arx_l5/`. Industrial: `franka_emika_panda/`, `franka_fr3/`, `universal_robots_ur5e/`,
-`kuka_iiwa_14/`, `kinova_gen3/`, `ufactory_xarm7/`. Some models ship `*_mjx.xml` variants
-tuned for MJX. Each README states the minimum MuJoCo version and the derivation steps.
+- **Core**: `pip install mujoco` (4.0.1), Python >= 3.11. Since 4.0 `mujoco` is a
+  metapackage: `mujoco-core` (numpy only; headless servers, RL workers) + `mujoco-studio` +
+  `glfw`/`pyopengl`.
+- **CPU batch**: `from mujoco import batch, rollout`; multi-threaded, float64, all
+  solvers/plugins.
+- **MJX** (`pip install mujoco-mjx`, `from mujoco import mjx`): `impl="jax"` (default; any XLA
+  device; differentiable) or `impl="warp"` (NVIDIA; not differentiable).
+- **MuJoCo Warp** (`pip install mujoco-warp`, `import mujoco_warp as mjw`): NVIDIA GPU,
+  highest-throughput batches, PyTorch training; not differentiable.
+- **MuJoCo Playground** (`pip install playground`, 1.0.1): rewritten as **PyTorch** tasks on
+  `reaf-sim` + MuJoCo Warp with RSL-RL training and real-robot deploy. The original JAX/MJX
+  envs live in the repo's `rss2025/` directory.
+- **Menagerie**: curated MJCF robots (`pip install mujoco-menagerie`); never hand-write a
+  common arm. SO-101: `robotstudio_so101/so101.xml`. Some models ship `*_mjx.xml` variants.
+- **dm_control** 1.0.52 requires `mujoco>=4.0.1`; for new procedural models use
+  `mujoco.MjSpec`, not PyMJCF. **Gymnasium** 1.4.0: `*-v5` envs only; `-v2`/`-v3` raise a
+  mujoco-py error.
+- **Viewers**: `mujoco.viewer` (managed/passive) and MuJoCo Studio
+  (`python -m mujoco.studio.viewer --model=x.xml`, `--gfx=web`), the successor of `simulate`.
+- **4.0 changes noted in this skill**: metapackage split; saturated actuators contribute no
+  implicit damping; the `composite`/`cable` plugin was removed (use 1D `flexcomp`);
+  `speculative` contacts are new.
 
 Choosing a backend (heuristic): one env or real-time loop -> CPU `mujoco`; tens to a few
 thousand envs on a many-core box, or you need `noslip`/PGS/plugins/float64 ->
@@ -69,8 +73,6 @@ thousand envs on a many-core box, or you need `noslip`/PGS/plugins/float64 ->
 `impl="warp"` inside JAX); gradients through dynamics, TPU, AMD or Apple GPU -> MJX-JAX.
 
 ## MJCF Essentials
-
-### A complete, runnable model
 
 This model (executed, see the loop below) shows the patterns that matter: explicit angle
 units, `implicitfast`, a default class tree that separates visual and collision geoms,
@@ -121,100 +123,28 @@ and a keyframe.
 </mujoco>
 ```
 
-### Rules that prevent most modelling bugs
+Rules that prevent most modelling bugs (full text: `references/mjcf-reference.md`, last
+section; attribute tables with verified defaults are in the same file):
 
-- **Angles**: `compiler/angle` defaults to `"degree"` for MJCF (always radian for URDF).
-  `range="-1.57 1.57"` without `angle="radian"` is +/-1.57 degrees. Set it explicitly.
-- **Asset paths**: `meshdir`/`texturedir`/`assetdir` are relative to the main model file.
-  Only the last `<visual>` block in a file counts; merge them.
-- **Mass and inertia**: `inertiafromgeom="auto"` (default) infers mass and inertia from geoms
-  only when a body has no `<inertial>`, using `density="1000"` (water) unless a geom sets
-  `mass`. Every geom in `inertiagrouprange` (default `"0 5"`) counts, including visual
-  geoms with `contype=conaffinity=0`: a body with a collision sphere (group 3) and an
-  identical visual sphere (group 2) compiled to **twice** the mass (verified). Fix with
-  `inertiagrouprange`, `density="0"` or `mass="0"` on one set, or explicit `<inertial>` from
-  CAD (preferred for real robots). `inertiafromgeom="true"` overrides imported nonsense
-  inertias; `boundmass`/`boundinertia` clamp tiny URDF dummy links; `balanceinertia` fixes
-  triangle-inequality violations.
-- **Defaults classes**: `<default class="x">` nests; children inherit from parents;
-  elements select with `class="x"`, and `childclass` on a body applies to its subtree. The
-  top-level default is the place to change MuJoCo's dated physics defaults once.
-- **Joints**: `type` is `hinge` (default), `slide`, `ball`, `free` (or `<freejoint/>`).
-  `armature` (reflected rotor inertia, I_rotor x gear^2) and `damping` default to 0 and should
-  almost never be 0 on a geared robot joint. Since 3.7.0 `damping` and `stiffness` accept up
-  to three polynomial coefficients; XML `damping="0.1"` still works, but in `MjSpec` assign a
-  3-vector (`joint.damping = [0.1, 0, 0]`; a scalar raises `TypeError`). `frictionloss` (dry friction) adds a constraint
-  row per joint; use it where stiction matters.
-- **Actuators** (shortcuts of `<general>`): `motor` (torque = gear x ctrl), `position`
-  (`kp` default 1, `kv` default 0, or `dampratio`; `timeconst` adds a filter;
-  `inheritrange="1"` copies the joint range into `ctrlrange`), `velocity`, `intvelocity`,
-  `damper`, `cylinder`, `muscle`, `adhesion`, plus newer `pid` (pos/vel setpoints, `ki`,
-  `imax`, `slewmax`), `dcmotor` and `orientation`. A position actuator compiles to
-  `gainprm[0]=kp`, `biasprm[1:3]=[-kp, -kv]`. Always set `forcerange` (unlimited by default)
-  and keep `ctrlrange` inside the joint `range` except on grippers. Actuators also accept
-  `armature`, `damping` (reflected through `gear`), and `delay`/`nsample` for control latency.
-- **Collision filtering**: two geoms can collide iff
-  `(contype1 & conaffinity2) || (contype2 & conaffinity1)`; both default to 1. Geoms in the
-  same body never collide; parent-child bodies are excluded by default (`filterparent`).
-  Use `<contact><exclude body1 body2/></contact>` for specific pairs and `<pair>` to
-  force a pair with custom `condim`/`friction` (5 values)/`solref`/`solimp`.
-- **Equality constraints**: `connect` (ball joint between bodies), `weld` (6-DoF lock; the
-  standard way to drive a free body from a `mocap="true"` body), `joint` (polynomial joint
-  coupling, e.g. mirrored gripper fingers), `tendon`, `flex`. Soften with `solref`/`solimp`.
-- **Keyframes**: `<key name qpos qvel act ctrl mpos mquat time/>`; note mocap fields are
-  `mpos`/`mquat`. Missing entries fall back to `qpos0`/zeros. Re-record keyframes whenever
-  you add or remove joints: `qpos` is positional.
-- **Sensors** write fixed slots into `data.sensordata`. Use them (not `data.contact`) for
-  observations: `<contact>` sensors (since 3.3.5) give a fixed-size, filtered, sorted view of
-  contacts (`geom1/geom2/body1/body2/subtree1/site`, `num`, `data="found force ..."`,
-  `reduce="mindist|maxforce|netforce"`); `touch` sums normal force inside a site volume.
-  The sensor `noise` attribute **does not affect simulation**; it only stores a standard
-  deviation. Add noise yourself.
+- **Angles**: `compiler/angle` defaults to `"degree"` for MJCF (always radian for URDF). Set it.
+- **Mass**: every geom in `inertiagrouprange` (default `"0 5"`) adds inferred mass, including
+  visual geoms with `contype=conaffinity=0`; a duplicated visual geom doubled the mass
+  (verified). Use explicit `<inertial>`, `inertiagrouprange`, or `mass="0"`/`density="0"`.
+- **Joints**: `armature` and `damping` default to 0 and should almost never be 0 on a geared
+  joint. In `MjSpec`, `damping`/`stiffness` take a 3-vector (a scalar raises `TypeError`).
+- **Actuators**: `position` has `kp` default 1, `kv` 0; it compiles to `gainprm[0]=kp`,
+  `biasprm[1:3]=[-kp, -kv]`. Always set `forcerange`; keep `ctrlrange` inside the joint `range`
+  except on grippers.
+- **Collision filtering**: collide iff `(contype1 & conaffinity2) || (contype2 & conaffinity1)`;
+  same-body and parent-child pairs are excluded; use `<exclude>` and `<pair>`.
+- **Keyframes**: `qpos` is positional; re-record after adding or removing joints. Mocap
+  fields are `mpos`/`mquat`.
+- **Sensors**: observe through `data.sensordata` and `<contact>` sensors, not `data.contact`.
+  Sensor `noise` **does not affect simulation**; add noise yourself.
 
-### URDF import
-
-```python
-spec = mujoco.MjSpec.from_file("robot.urdf")   # or MjModel.from_xml_path for a quick look
-print(spec.compile().nu)                         # 0: URDF has no actuator model
-```
-
-What goes wrong and the fix:
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| `nu == 0`, robot collapses | URDF has no actuators; `<limit effort>` becomes joint `actuatorfrcrange` only | Add actuators in MJCF/MjSpec (example below) |
-| `Error opening file 'package:/...'` | `package://` URIs are not resolved by release builds | `<mujoco><compiler meshdir="meshes" strippath="true"/></mujoco>` inside `<robot>`, or rewrite paths (verified) |
-| Visual meshes missing | URDF defaults `discardvisual="true"` | `<compiler discardvisual="false"/>` |
-| Links merged, sites/cameras lost | URDF defaults `fusestatic="true"` | `fusestatic="false"` or attach to a moving body |
-| Contacts slow and jittery | Detailed STL collision meshes, collided as convex hulls | Replace with primitives or convex decomposition; cap `maxhullvert` |
-| Unstable, tiny links | Dummy links with ~1e-6 inertia, mass ratios > 1000:1 | `boundmass`/`boundinertia`, fix at source |
-| Typos silently ignored | The `<mujoco>` block inside URDF is **not** schema-checked | Convert once, then edit and version the MJCF |
-
-In 4.0.1 a URDF loads with `strippath=false`, `fusestatic=true`, `discardvisual=true`
-(checked empirically); older Menagerie conversions set `strippath="false"` explicitly, so
-set it explicitly rather than relying on the version. The URDF `<mujoco>` extension accepts `compiler`,
-`option` and `size`. Recommended workflow (MuJoCo docs): add extensions, load, save as MJCF,
-then add actuators, defaults and sensors in the MJCF and keep that as the source of truth.
-
-```python
-# Executed: add what URDF cannot express, then save MJCF.
-spec.option.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
-j1 = spec.joint("j1")
-j1.armature = 0.01
-j1.damping = [0.05, 0, 0]
-act = spec.add_actuator(name="j1", target="j1", trntype=mujoco.mjtTrn.mjTRN_JOINT)
-act.set_to_position(kp=30, kv=1.0)      # also set_to_motor, set_to_pid, set_to_velocity, ...
-act.ctrlrange = [-1.5, 1.5]
-act.forcerange = [-10, 10]
-model = spec.compile()
-open("robot.xml", "w").write(spec.to_xml())
-```
-
-Composition: `parent.attach(child_spec, prefix="hand/", site=parent.site("attachment_site"))`
-attaches one spec to another (used by Menagerie to put hands on arms).
-
-Load `references/mjcf-reference.md` for attribute tables with verified defaults (option,
-compiler, geom, joint, actuator, sensor, equality) and the full URDF conversion recipe.
+URDF import (`MjSpec.from_file("robot.urdf")`: `nu == 0`, `package://` paths, discarded
+visuals, fused links) and `MjSpec` editing: `references/python-examples.md`, with the
+conversion recipe in `references/mjcf-reference.md`.
 
 ## Python Simulation Loop
 
@@ -242,45 +172,21 @@ tip = data.sensor("tip_pos").data.copy()            # copy: views are overwritte
 assert np.isfinite(data.qpos).all()
 ```
 
-Key semantics:
+Key semantics (full list, state save/restore and the passive viewer:
+`references/python-examples.md`):
 
-- `mj_step` = forward dynamics at `data.time`, then integrate to `time + timestep`.
-  **After `mj_step`, `sensordata`, `xpos`, contacts etc. describe the state at the start of
-  that step**, one step behind `qpos` (verified: qpos 2.6765 vs jointpos sensor 2.6635 for a
-  swinging link). Call `mj_forward` before reading if you need them consistent with `qpos`,
-  or use `mj_step1` / set `ctrl` / `mj_step2` so the controller sees fresh quantities
-  (single-step integrators only; RK4 needs `mjcb_control`).
+- **After `mj_step`, `sensordata`, `xpos`, contacts etc. describe the state at the start of
+  that step**, one step behind `qpos`. Call `mj_forward` before reading if you need them
+  consistent with `qpos`, or use `mj_step1` / set `ctrl` / `mj_step2`.
 - `mj_forward` computes everything without integrating. Call it after editing `qpos`,
   `qvel`, `mocap_pos` or after a reset, before reading positions or sensors.
-- `mj_step(m, d, nstep=N)` repeats with the same `ctrl` and releases the GIL once.
-- Named access: `model.body("x")`, `data.joint("j").qpos`, `data.actuator("a").ctrl`,
-  `data.sensor("s").data`, `model.key("home").id`. Accessors exist for body, geom, joint,
-  site, camera, light, actuator, sensor, tendon, equality, keyframe, mesh, and more. With
-  `MjSpec` use `data.bind(spec_element)`. Writes go through views, so `.copy()` when logging.
-- Never write `xpos`, `xquat`, `sensordata`: they are outputs. Write `qpos`, `qvel`, `ctrl`,
-  `qfrc_applied`, `xfrc_applied`, `mocap_pos`, `mocap_quat`.
+- Never write `xpos`, `xquat`, `sensordata`: they are outputs.
 - Quaternions are scalar-first `[w, x, y, z]`; SciPy and ROS are scalar-last.
-- Free-joint `qpos` is 7 numbers (pos + quat) but `qvel` is 6, so `nq != nv`. Use
-  `model.jnt_qposadr` / `jnt_dofadr` or named access instead of hard-coded slices.
+- Free-joint `qpos` is 7 numbers but `qvel` is 6, so `nq != nv`: use named access or
+  `jnt_qposadr` / `jnt_dofadr`.
 
-Reset and state save/restore (executed):
-
-```python
-mujoco.mj_resetData(model, data)                      # to qpos0, zero velocity, time 0
-mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
-
-spec = mujoco.mjtState.mjSTATE_INTEGRATION     # everything needed for exact continuation
-state = np.empty(mujoco.mj_stateSize(model, spec))
-mujoco.mj_getState(model, data, state, spec)
-mujoco.mj_step(model, data, nstep=50)
-mujoco.mj_setState(model, data, state, spec)
-mujoco.mj_forward(model, data)
-```
-
-`mjSTATE_FULLPHYSICS` = time + qpos, qvel, act, history, plastic, plugin state. It excludes
-`ctrl`, applied forces, mocap poses and solver warm-start; `mjSTATE_INTEGRATION` adds them.
-Verified: restoring FULLPHYSICS (plus ctrl) continued with a 1e-16 difference, INTEGRATION
-bit-identically. Use FULLPHYSICS for compact logging, INTEGRATION for checkpoint/replay.
+Reset with `mujoco.mj_resetData` or `mj_resetDataKeyframe`; checkpoint with `mj_getState` /
+`mj_setState` and `mjSTATE_INTEGRATION` (bit-identical continuation).
 
 Determinism: the same binary, model, initial state and control sequence reproduce
 bit-identical trajectories on CPU (asserted in the executed example; `mujoco.batch` is
@@ -289,118 +195,25 @@ documented as bit-identical to serial stepping). Things that break it: resetting
 measured 3e-6 divergence after 300 contact steps, versus bit-identical with `mj_resetData`),
 different library versions or builds, GPU float32 backends, and unseeded Python randomness.
 
-Interactive viewing:
-
-```python
-import time, mujoco, mujoco.viewer
-with mujoco.viewer.launch_passive(model, data) as viewer:   # macOS: run with `mjpython`
-    while viewer.is_running():
-        t0 = time.time()
-        mujoco.mj_step(model, data)
-        viewer.sync()                         # push state to the viewer, pull perturbations
-        time.sleep(max(0, model.opt.timestep - (time.time() - t0)))
-```
-
-Modify viewer options under `with viewer.lock():`. `python -m mujoco.viewer --mjcf=scene.xml`
-opens a file directly; MuJoCo Studio (`python -m mujoco.studio.viewer --model=scene.xml
---gfx=web`) streams to a browser from a headless host.
-
 ## Rendering
 
-```python
-import os
-# os.environ["MUJOCO_GL"] = "egl"   # headless Linux + NVIDIA; "osmesa" = CPU software. BEFORE import.
-import mujoco
-
-with mujoco.Renderer(model, height=480, width=640) as renderer:   # create ONCE, reuse
-    renderer.update_scene(data, camera="overhead")    # name, id, or mujoco.MjvCamera
-    rgb = renderer.render()                           # (480, 640, 3) uint8
-
-    renderer.enable_depth_rendering()
-    renderer.update_scene(data, camera="overhead")
-    depth = renderer.render()                         # (480, 640) float32, metres
-    renderer.disable_depth_rendering()
-
-    renderer.enable_segmentation_rendering()
-    renderer.update_scene(data, camera="overhead")
-    seg = renderer.render()                           # (480, 640, 2) int32: [obj id, mjtObj type]
-    renderer.disable_segmentation_rendering()
-
-box = model.geom("box_geom").id
-mask = (seg[..., 1] == mujoco.mjtObj.mjOBJ_GEOM) & (seg[..., 0] == box)
-```
-
-Executed: depth at the image centre of a camera 1.5 m above a 0.2 m box returned 1.3, and
-the segmentation id matched the box geom id. Notes:
-
-- `MUJOCO_GL` values (from the bindings source): Linux `egl`, `osmesa`, `glx`, `glfw`;
-  macOS `cgl` (default) or `glfw`; Windows `wgl`/`glfw`; `disable` turns GL off. It is read
-  at import time, so set it before `import mujoco` (and before any library that imports it).
-  On EGL multi-GPU nodes `MUJOCO_EGL_DEVICE_ID` selects the device (a visible-device index or
-  CUDA id, ordered like `CUDA_VISIBLE_DEVICES`). `PYOPENGL_PLATFORM`, if set, must be `egl`
-  for the EGL backend and `osmesa` for OSMesa, or the import fails.
-- Width/height cannot exceed `<visual><global offwidth offheight/>` (default 640x480).
-- Cameras look along their local -Z with +Y up. Use `xyaxes`, `zaxis` or `mode="targetbody"`.
-  `fovy` is vertical field of view in degrees.
-- `render()` returns a fresh array by default; pass `out=` to reuse a buffer. Rendering
-  is much slower than physics: render at the policy rate, not every substep.
-- Collision geoms are often in an invisible group; set `MjvOption.geomgroup` and pass
-  `scene_option=` to `update_scene` to see them.
-- The Filament PBR renderer (`mujoco.rendering.filament`, `mujoco.mjrf`) is the new path for
-  photoreal images; `mujoco.Renderer` (classic OpenGL) is in maintenance mode but simplest.
-  For thousands of cameras on GPU use the MuJoCo Warp batch renderer (see reference).
+Create `mujoco.Renderer(model, height, width)` once (as a context manager) and reuse it:
+`update_scene(data, camera="name")` then `render()` gives `(H, W, 3)` uint8;
+`enable_depth_rendering()` gives float32 metres and `enable_segmentation_rendering()` gives
+`[obj id, mjtObj type]`. Set `MUJOCO_GL` (`egl`, `osmesa`, ...) **before** `import mujoco`.
+Width/height cannot exceed `<visual><global offwidth offheight/>` (default 640x480). Render at
+the policy rate, not every substep. Executed example, all `MUJOCO_GL` values, cameras, and the
+Filament and Warp renderers: `references/python-examples.md`.
 
 ## Contacts and Stability
 
-MuJoCo contacts are soft constraints: a small, controlled penetration is how they work.
-Tune in this order (from the official "Model tuning" guide; numbers are its starting points,
-i.e. heuristics):
+MuJoCo contacts are soft constraints. Tune in this order: fix modelling bugs (initial
+interpenetration, concave meshes collided as hulls, bad inertias, units) -> `implicitfast`
+-> timestep -> `cone="elliptic"` + `impratio` -> `solref` -> `solimp` -> `condim`/friction ->
+`noslip`. The full guide with defaults and starting values, collision geometry, the grasp
+recipe and the executed divergence example: `references/contacts-debugging.md`.
 
-1. **Fix modelling bugs first**: initial interpenetration, visual/collision mismatch, concave
-   meshes collided as hulls, implausible inertias, mm vs m mesh scale, degrees vs radians,
-   position targets driving into limits or surfaces.
-2. **Integrator**: default is `Euler`. Use `implicitfast` for almost everything (same cost,
-   implicit in `kv`/damping). `implicit` for fast-spinning coupled chains, `RK4` for
-   near-energy-conserving systems. `discrete` (new, Sept 2026, still changing) is implicit in
-   position too and stays stable with stiff servos or springs against contacts; it is not
-   supported by MJX-JAX.
-3. **Timestep**: default 2 ms. Contact-rich manipulation often wants 0.5-2 ms; locomotion
-   tolerates 5-15 ms. Throughput scales linearly with timestep up to divergence.
-4. **Friction cone**: `cone="elliptic"` with `impratio="10"` for manipulation (10-100 for legs);
-   avoid large `impratio` with the default `pyramidal` cone.
-5. **solref** (`"timeconst dampratio"`, default `"0.02 1"`): 20 ms is soft. Rigid contacts:
-   0.004-0.01, keep `timeconst >= 2 * timestep`. Negative form `"-stiffness -damping"` sets
-   them directly (`solref="-1000 0"` gives elastic bounce).
-6. **solimp** (`"dmin dmax width midpoint power"`, default `"0.9 0.95 0.001 0.5 2"`): rest
-   penetration and creep scale with `1 - dmin`; `0.95` halves them at some solver cost.
-   `solimp="0.01 ..."` almost disables the constraint; do not confuse it with `solref`.
-7. **condim / friction** (default `3`, `"1 0.005 0.0001"`): `condim="4"` adds torsional and
-   `6` adds rolling friction; use on grasp pads and round objects. Torsional/rolling
-   coefficients are lengths. Contacts take the **max** condim and element-wise **max**
-   friction of the two geoms unless one has higher `priority`. Frictionless: `condim="1"`.
-8. **margin / gap**: leave `margin=0` unless paired with `gap`, else objects hover.
-9. **Slow slip**: soft contacts allow slow creep even inside the cone. Elliptic +
-   `impratio` first, then `noslip_iterations="1"`-`"3"` (roughly 2x step cost, makes inverse
-   dynamics ill-defined). Backend support differs: see the GPU section.
-10. **Tunneling** of thin/fast geoms: enable `<option><flag speculative="enable"/></option>`
-    (new in 4.0, not for hfield/SDF/flex) before shrinking the timestep.
-
-Collision geometry: most primitive pairs (sphere, capsule, box, plane, ...) have dedicated
-pair functions that are much cheaper and give better normals than general convex CCD, and
-far cheaper than SDF collisions. A mesh is always collided as its **convex
-hull**, so a mug or bowl mesh behaves like a solid blob: decompose it (CoACD, or the
-Menagerie approach of several convex parts) and cap `maxhullvert` (Menagerie SO-101 uses
-128; MJX-JAX wants <= 64). `multiccd` and `nativeccd` are enabled by default in 4.0.1, which
-gives multiple contacts on flat mesh faces.
-
-Grasp recipe (executed: a parallel pinch lifting a 0.1 kg cube 0.17 m): `implicitfast`,
-elliptic cone, `impratio=10`, `solref="0.01 1"`, pad geoms with `condim="4"`, `priority="1"`
-and explicit friction, a force-limited position servo commanded slightly past contact so it
-squeezes, joint armature and damping on the finger slides, and `exclude` between the palm
-and finger bodies. Menagerie SO-101's gripper class (`condim="6"`,
-`friction="1 5e-3 5e-4"`, `solref="0.01 1"`, `priority="1"`) is a good template.
-
-### Debugging table
+Most common symptoms (full table in the reference):
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
@@ -412,172 +225,39 @@ and finger bodies. Menagerie SO-101's gripper class (`condim="6"`,
 | High-frequency jitter at rest | High gains vs armature, stick-slip, explicit damping | Add armature, `implicitfast`, lower `kp` or add `dampratio=1`, smaller timestep |
 | Thin parts pass through each other | Tunneling within one step | `speculative` flag, thicker collision geoms |
 | Mug/bowl behaves like a solid | Convex hull of a concave mesh | Convex decomposition |
-| Slow simulation | Mesh-mesh collisions, too many candidate pairs, high `iterations` | Primitives, `contype`/`exclude`, `maxhullvert`, profile with `testspeed`; enable `sleep` for resting clutter |
-| Joint drifts past its limit | Limits are soft too | Joint `solreflimit`/`solimplimit`, keep `ctrlrange` inside `range` |
 | Actuator does nothing | `ctrlrange` in degrees vs radians, `kp` left at default 1, `gear` sign | Inspect `model.actuator_gainprm`, `actuator_ctrlrange` |
-
-Detecting divergence (executed; a 1 g link driven by `kp=50 kv=5` at `dt=10 ms`):
-
-```python
-def make(integrator, armature):
-    return f"""<mujoco><option timestep="0.01" integrator="{integrator}"/>
-      <worldbody><body><joint name="j" axis="0 1 0" armature="{armature}"/>
-        <geom type="capsule" fromto="0 0 0 0.05 0 0" size="0.005" mass="0.001"/></body></worldbody>
-      <actuator><position joint="j" kp="50" kv="5"/></actuator></mujoco>"""
-
-for integ, arm in [("Euler", 0), ("implicitfast", 0), ("Euler", 0.1)]:
-    m = mujoco.MjModel.from_xml_string(make(integ, arm)); d = mujoco.MjData(m)
-    d.ctrl[0] = 1.0
-    mujoco.mj_step(m, d, nstep=500)
-    bad = d.warning[mujoco.mjtWarning.mjWARN_BADQACC].number
-    print(integ, arm, bad, round(d.qpos[0], 3))
-# Euler 0 1 0.027   <- diverged, auto-reset, ended far from the 1.0 target
-# implicitfast 0 0 1.0
-# Euler 0.1 0 1.0
-```
 
 The `autoreset` flag (on by default) resets the state when it detects numerical problems,
 so a diverged run can look merely wrong rather than crash. In RL pipelines treat any
 `BADQACC`/`BADQPOS` warning count increase or non-finite `qpos` as a terminal, invalid
 transition rather than letting the reset hand the policy a teleported state.
-`model.opt.enableflags |= mujoco.mjtEnableBit.mjENBL_ENERGY` fills `data.energy`
-(potential, kinetic): growing energy in an unforced, undamped model means integration error.
 
 ## GPU and Batched Simulation
 
-Device data structures need static sizes, which is the root of most surprises.
-
-MJX (JAX). Executed on CPU; the same code runs on GPU/TPU:
-
-```python
-import jax, jax.numpy as jnp, mujoco
-from mujoco import mjx
-
-mx = mjx.put_model(mujoco.MjModel.from_xml_string(XML))   # impl="jax" by default
-dx0 = mjx.make_data(mx)
-
-def rollout(d, n_steps=250):
-    def body(d, _):
-        d = mjx.step(mx, d)
-        return d, d.qpos[2]
-    return jax.lax.scan(body, d, None, length=n_steps)
-
-vx = jax.random.uniform(jax.random.PRNGKey(0), (256,), minval=-1, maxval=1)
-batch = jax.vmap(lambda v: dx0.replace(qvel=dx0.qvel.at[0].set(v)))(vx)
-final, z_traj = jax.jit(jax.vmap(rollout))(batch)          # (256, 7), (256, 250)
-
-# Domain randomisation: vmap only the randomised field, then batch it via in_axes.
-gf = jax.vmap(lambda mu: mx.geom_friction.at[:, 0].set(mu))(jnp.linspace(0.2, 1.5, 256))
-mx_b = mx.tree_replace({"geom_friction": gf})
-in_axes = jax.tree_util.tree_map(lambda x: None, mx).tree_replace({"geom_friction": 0})
-stepped = jax.jit(jax.vmap(mjx.step, in_axes=(in_axes, 0)))(mx_b, batch)
-```
-
-Do not return a whole `mjx.Model` from a `vmap`ped function: every field gets a batch axis
-and stepping fails with a length-mismatch `IndexError` (hit while testing).
-
-MuJoCo Warp (executed on the Warp CPU device):
-
-```python
-import mujoco, mujoco_warp as mjw, numpy as np
-mjm = mujoco.MjModel.from_xml_string(XML); mjd = mujoco.MjData(mjm)
-nworld = 16
-m = mjw.put_model(mjm, batch_sizes={"geom_friction": nworld})   # per-world model field
-fr = np.tile(mjm.geom_friction[None], (nworld, 1, 1)); fr[:, :, 0] = np.linspace(0.3, 1.2, nworld)[:, None]
-m.geom_friction.assign(fr)
-d = mjw.put_data(mjm, mjd, nworld=nworld, nconmax=8, njmax=64)   # or mjw.make_data(...)
-for _ in range(300):
-    mjw.step(m, d)                     # in place; capture in a CUDA graph on GPU
-assert not np.any(d.overflow.numpy())  # buffers overflowed -> undefined behaviour
-mjw.get_data_into(mjd, mjm, d, world_id=3)
-```
-
-What differs from CPU MuJoCo (details and full tables in `references/gpu-batched-sim.md`):
+Device data structures need static sizes, which is the root of most surprises. Executed MJX
+and MuJoCo Warp examples (rollouts, domain randomisation via `in_axes` / `batch_sizes`) and
+the full list of differences from CPU: `references/gpu-batched-sim.md`.
 
 - float32 on device vs float64 on CPU: stiff models that are fine on CPU can drift or NaN.
-- No `PGS` on any GPU path. `noslip`: MJX-JAX has no implementation and does **not** reject
-  `noslip_iterations > 0`, so it is silently ignored (verified in 4.0.1). MuJoCo Warp 4.0.1
-  implements it except with `discrete` (the MJX docs table still lists it as unsupported).
-- MJX-JAX additionally lacks constraint islands, plugins, flex, SDF, cylinder-box/mesh and
-  ellipsoid-box/mesh collisions, and `implicitfast` with fluid drag. `integrator="discrete"`
-  passes `put_model` but `mjx.step` raises `NotImplementedError` (verified).
-- MJX-JAX allocates contact slots for every geom pair that *could* collide; prune with
-  `contype`/`conaffinity`, `exclude`, explicit `<pair>`s, and the custom numerics
-  `max_contact_points` / `max_geom_pairs`. Keep hulls under ~32 vertices for mesh-mesh.
-  Lower `iterations`/`ls_iterations` (Newton often converges in 1-4).
-- MuJoCo Warp / MJX-Warp sizes contacts with `nconmax`/`naconmax` and constraints with
-  `njmax` (per world, hard cap); `<size nconmax njmax>` in XML is ignored. Excess contacts
-  are dropped and flagged in `d.overflow`. Read contacts through contact sensors.
-- MJX-Warp resets subsets of worlds with `data.where(done, reset_data)`, not `tree_map`.
-- A GPU step is slower than a CPU step; GPUs win on throughput. One env on MJX-JAX can be
-  ~10x slower than CPU MuJoCo (official figure).
-
-Playground 1.x environments are layered PyTorch modules (`reaf.simulation.torch`): a
-device layer binds joints/actuators/cameras/sensors to the model, a task layer supplies
-features, rewards and terminations, and an `EnvironmentReset` hook gets privileged model and
-data access for domain randomisation. Training: `python -m mujoco_playground.rl.rsl_rl.train
---env=SO101PickCube`. For the older JAX `MjxEnv` / Brax workflow use `rss2025/`. Algorithm
-and reward choices belong to `robot-reinforcement-learning`.
+- No `PGS` on any GPU path. MJX-JAX silently ignores `noslip_iterations > 0` (verified in
+  4.0.1) and rejects `integrator="discrete"` at `mjx.step`.
+- MJX-JAX allocates contact slots for every geom pair that *could* collide: prune with
+  `contype`/`conaffinity`, `exclude` and `<pair>`s.
+- MuJoCo Warp sizes buffers with `nconmax`/`naconmax`/`njmax` per world (`<size>` in XML is
+  ignored); excess contacts are dropped and flagged in `d.overflow`. Check it.
+- A GPU step is slower than a CPU step; GPUs win on throughput.
 
 ## Sim-to-Real for MuJoCo Models
 
 Identify before you randomise: randomising around a wrong nominal model only teaches the
-policy to be robust to the wrong robot.
-
-What to identify on an arm (in typical order of impact, heuristic): joint `armature`
-(reflected rotor inertia dominates small links and geared servos), actuator `kp`/`kv` and
-`forcerange` (servo firmware gains do not map 1:1 to MuJoCo gains; Menagerie SO-101 notes
-its STS3215 `kp="998.22" kv="2.731" forcerange="-2.94 2.94"` were derived for a servo P gain
-of 16), joint `frictionloss` and `damping`, control latency, and link masses for payloads.
-
-`mujoco.sysid` (`pip install "mujoco[sysid]"`) fits `MjSpec` parameters to logged
-trajectories with box-constrained Gauss-Newton over batched `mujoco.rollout` evaluations,
-with helpers for physically consistent inertia (`body_inertia_param`), actuator gains
-(`apply_pdgain`), sensor delays, and an HTML report. Playground's
-`mujoco_playground/tasks/sysid/so101` fits armature, frictionloss, stiffness and damping for
-all six SO-101 joints from teleop logs and is the best worked example. Excite every joint
-with reversals and varying speeds; a slow sinusoid cannot separate armature from damping.
-
-Validate the pipeline on synthetic data first. In a test here (data generated by the model
-itself, known armature 0.03 and damping 0.2), `mujoco.sysid` recovered both exactly, but a
-one-sample misalignment between the sensor log and the control log biased them by -5% and
--8% with zero noise. The reference file shows the alignment that recovered exactly.
-
-Latency is native: actuator `delay` + `nsample` (history buffer; `delay` > 0 requires
-`nsample` > 0, minimum effective delay one timestep) and the same on sensors, plus sensor
-`interval` for lower-rate sensors. Prefer this over ad-hoc Python queues so the delay is
-part of the saved model and of `mjSTATE_FULLPHYSICS`.
-
-Domain randomisation on a compiled `MjModel` (executed). Real-valued fields are safe to
-write; some need `mj_setConst` to recompute derived quantities:
-
-```python
-b = model.body("link1").id
-s = rng.uniform(0.8, 1.2)
-model.body_mass[b] = nominal_mass[b] * s
-model.body_inertia[b] = nominal_inertia[b] * s           # scale with mass
-model.dof_armature[:] = nominal_armature * rng.uniform(0.8, 1.2)
-model.geom_friction[:, 0] = rng.uniform(0.6, 1.2)
-kp = 30 * rng.uniform(0.9, 1.1)
-model.actuator_gainprm[0, 0] = kp
-model.actuator_biasprm[0, 1] = -kp                       # position servo: keep bias = -kp
-mujoco.mj_setConst(model, data)                          # mass, inertia, armature, geom pose/size
-mujoco.mj_resetData(model, data)                         # mj_setConst uses data as scratch
-```
-
-- `mj_setConst` does **not** recompute a `dampratio`-derived `kv`; set `biasprm[2]` yourself
-  or recompile from the spec.
-- Integer and structural fields (geom type, `nq`, `contype` on geoms that did not collide at
-  compile time, mesh vertices of colliding meshes) are unsafe at runtime: change the `MjSpec`
-  and recompile.
-- Per-sim fields on CPU: `mujoco.batch.Batch(model, nsim, nthread)`, then
-  `b.body("link1").mass = values[:, None]` (shape `(nsim, 1)`) and `b.set_const()`.
-- On GPU: batched `mjx.Model` fields through `in_axes`, or `mjw.put_model(...,
-  batch_sizes={...})` (indexed `field[world % batch]`).
-
-Load `references/sim-to-real-model-fields.md` for the full runtime-modifiable field table,
-a sysid skeleton, and a DR field checklist. Randomisation ranges and curricula are
-algorithm design: see `robot-reinforcement-learning`.
+policy to be robust to the wrong robot. Identify joint `armature`, actuator `kp`/`kv` and
+`forcerange`, `frictionloss`/`damping`, latency and payload masses with `mujoco.sysid`
+(`pip install "mujoco[sysid]"`); model latency natively with actuator/sensor `delay` +
+`nsample`. After changing mass, inertia or armature on a compiled model call `mj_setConst`
+then `mj_resetData`; keep a position servo's `biasprm` consistent with a randomised `kp`.
+Details, the executed DR example and the runtime-modifiable field table:
+`references/sim-to-real-model-fields.md`. Randomisation ranges and curricula are algorithm
+design: see `robot-reinforcement-learning`.
 
 ## Anti-Patterns
 
@@ -638,16 +318,27 @@ algorithm design: see `robot-reinforcement-learning`.
 - `robotics-testing`: simulation tests, determinism and golden-trajectory regression tests
 - `ros2`: bridging a MuJoCo sim to ROS 2 topics and controllers
 
-## References
+## Reference Files
 
 Load on demand:
 
+- `references/ecosystem.md`: when picking a package or Menagerie model; full component table
+  with install names and status, and the Menagerie arm list.
 - `references/mjcf-reference.md`: when writing or reviewing MJCF in detail; attribute tables
-  with verified defaults, actuator shortcut mappings, sensor list, URDF conversion recipe.
+  with verified defaults, actuator shortcut mappings, sensor list, URDF conversion recipe,
+  and the full modelling-rules text.
+- `references/python-examples.md`: when writing Python beyond the minimal loop; full loop
+  semantics, reset and `mj_getState`/`mj_setState`, the passive viewer, the executed
+  RGB/depth/segmentation example and `MUJOCO_GL` details, URDF import pitfalls and `MjSpec`
+  editing.
+- `references/contacts-debugging.md`: when a sim explodes, jitters, sinks, tunnels or slips,
+  or when tuning a grasp; the ten-step tuning guide, collision geometry, the full symptom
+  table, divergence detection and energy checks.
 - `references/gpu-batched-sim.md`: when porting to MJX or MuJoCo Warp, sizing contact
-  buffers, writing batched resets/DR, or reading Playground/rss2025 env code.
+  buffers, writing batched resets/DR, or reading Playground/rss2025 env code; includes the
+  executed MJX and Warp examples.
 - `references/sim-to-real-model-fields.md`: when randomising model fields at runtime, running
-  `mujoco.sysid`, or adding latency and noise models.
+  `mujoco.sysid`, or adding latency and noise models; includes the executed DR example.
 
 Primary sources: mujoco.readthedocs.io (XML reference, Modeling > Model tuning, Computation,
 Python, MJX, MuJoCo Warp), github.com/google-deepmind/mujoco (`doc/changelog.rst`,

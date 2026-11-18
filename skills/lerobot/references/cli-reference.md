@@ -98,6 +98,12 @@ auto-discovery).
 | `--dataset.rgb_encoder.{vcodec,pix_fmt,g,crf,preset,...}` | `libsvtav1`, `yuv420p`, `g=2` | `vcodec=auto` picks a HW encoder (e.g. `h264_videotoolbox`) |
 | `--dataset.depth_encoder.{depth_min,depth_max,shift,use_log,...}` | | Depth quantisation |
 
+- Defaults: `fps=30`, `episode_time_s=60`, `reset_time_s=60`, `num_episodes=50`, `video=true`,
+  `push_to_hub=true`, `streaming_encoding=false`. Use `--dataset.private=true` and
+  `--dataset.tags='["so101"]'` as needed.
+- Episode keys (`→`/`n`, `←`/`r`, `ESC`/`q`): if no global key backend exists (Wayland, SSH, macOS
+  without Accessibility), the same keys are read from the focused terminal.
+
 ## `lerobot-replay`
 
 `--robot.*`, `--dataset.repo_id`, `--dataset.episode`, `--dataset.root`, `--dataset.fps` (30), `--play_sounds`.

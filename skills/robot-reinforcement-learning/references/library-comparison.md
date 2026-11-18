@@ -39,7 +39,7 @@ CPU Gymnasium env, tens of envs?
 Real robot, hours of data?
 ├── LeRobot hardware                        -> LeRobot HIL-SERL
 ├── Franka / custom arm                     -> SERL/HIL-SERL recipe (port to your stack) or SB3 SAC as a sanity baseline
-└── Already have a BC / diffusion / VLA policy -> residual RL, DSRL, or RECAP-style advantage conditioning (see SKILL.md)
+└── Already have a BC / diffusion / VLA policy -> residual RL, DSRL, or RECAP-style advantage conditioning (see hybrid-methods.md)
 ```
 
 ## Interop Gotchas

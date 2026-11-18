@@ -13,7 +13,8 @@ download, not a blog post or this table.
 
 ## Contents
 
-1. From-scratch policy families (ACT, Diffusion Policy, BC baselines)
+1. From-scratch policy families (ACT, Diffusion Policy, BC baselines), family notes,
+   licences, VLA fine-tuning
 2. Pretrained generalist policies and VLAs
 3. Published defaults worth knowing
 4. Results that change practice
@@ -33,6 +34,33 @@ download, not a blog post or this table.
 
 Sizes and compute in this table are order-of-magnitude heuristics from the papers'
 reported setups, not guarantees.
+
+### Family notes, licences, VLA fine-tuning
+
+- **Behaviour cloning MLP/CNN**: single-step regression. Fine for state-based tasks and
+  for proving the pipeline works. Collapses on multimodal demos (averages modes).
+- **ACT**: CVAE plus transformer predicting chunks of absolute joint targets with L1 loss.
+  ~80M parameters, ~5 h training on one 11 GB GPU in the paper. Strong default for
+  leader-follower data.
+- **Diffusion Policy**: denoises action sequences; models multimodal action
+  distributions; slower inference (use DDIM with ~10 steps). Start with the CNN variant.
+- **Flow-matching heads**: the same niche as diffusion with fewer integration steps;
+  used inside pi0, SmolVLA and GR00T. Recent evidence suggests the benefit of
+  generative heads comes mostly from iterative refinement rather than multimodality
+  (arXiv 2512.01809), so a well-built regression chunk policy is a fair baseline.
+- **VLAs**: pretrained vision-language backbones plus an action head. Worth it for
+  language conditioning, multi-task, and generalisation to new objects and scenes. Not
+  automatically better on a narrow single task, and inference is heavier.
+
+Licences differ (MIT, Apache-2.0, Gemma terms, NVIDIA licences, some non-commercial) and
+can disagree between a README and the checkpoint's LICENSE file. Check
+the licence columns in section 2 and then the actual checkpoint repo before a product
+decision.
+
+Fine-tuning VLAs: start with the provider's recipe (openpi configs, GR00T's "few
+thousand steps" guidance, LeRobot defaults). LoRA if memory-bound; full fine-tuning
+when you have the GPU and enough data. Keep the action normalisation and camera keys
+exactly as the fine-tuning config expects.
 
 ## 2. Pretrained generalist policies and VLAs
 

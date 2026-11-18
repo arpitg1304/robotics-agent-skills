@@ -169,3 +169,34 @@ torchvision v2 class or a LeRobot class such as `SharpnessJitter`, `GaussianNois
 - Lance (`lerobot[lancedb]`): read-only, random access from object storage. Convert with
   `lerobot-lance-convert` from the separate `lerobot-lancedb` package.
 - HF Storage Buckets: `--dataset.repo_type=bucket` or `--dataset.root=hf://buckets/<org>/<bucket>`.
+
+## Quick start (load, visualise, edit, convert)
+
+SO-101 features (verified pattern): `action` and `observation.state` are float32 vectors with
+`names` `[shoulder_pan.pos, shoulder_lift.pos, elbow_flex.pos, wrist_flex.pos, wrist_roll.pos, gripper.pos]`.
+Images are `observation.images.<camera_name>`. Bookkeeping columns are `timestamp`, `frame_index`,
+`episode_index`, `index` and `task_index`.
+
+```python
+from lerobot.datasets import LeRobotDataset, LeRobotDatasetMetadata
+
+meta = LeRobotDatasetMetadata("user/so101_cube_to_bowl_20261118_143012")   # metadata only, cheap
+print(meta.fps, meta.robot_type, meta.total_episodes, meta.total_frames, meta.camera_keys)
+print(meta.features["action"]["names"], meta.stats["action"]["mean"])
+
+ds = LeRobotDataset(meta.repo_id, episodes=[0, 1],
+                    delta_timestamps={"action": [i / meta.fps for i in range(50)]})  # 50-step action chunks
+item = ds[0]          # dict of tensors; images (C,H,W) float in [0,1]; item["action"].shape == (50, 6)
+```
+- Visualise in the browser at `https://huggingface.co/spaces/lerobot/visualize_dataset?path=/<repo_id>/episode_0`.
+  Locally, run `lerobot-dataset-viz --repo-id <id> --episode-index 0`, adding
+  `--root <dir> --mode local` for a local dataset or `--display-mode foxglove` for Foxglove.
+- Edit with `lerobot-edit-dataset --repo_id <id> --operation.type <op>`. The ops are
+  `delete_episodes`, `split`, `merge`, `remove_feature`, `modify_tasks`,
+  `convert_image_to_video`, `recompute_stats`, `reencode_videos` and `info`. Add `--new_repo_id`
+  to keep the original, and `--push_to_hub true` to upload. `modify_tasks` always works in
+  place. Merging needs identical features.
+- Convert v2.1 to v3.0 with `python -m lerobot.scripts.convert_dataset_v21_to_v30 --repo-id=<id>`.
+  It also takes `--root`, `--push-to-hub=false` and `--force-conversion`.
+- If you write datasets from Python, call **`dataset.finalize()` before `push_to_hub()`**.
+  Without it the parquet footers are never written and the files are corrupt.

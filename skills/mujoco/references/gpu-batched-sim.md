@@ -174,3 +174,79 @@ steps and compare `qpos`. Expect float32-level divergence that grows in contact-
 scenes; a jump at the first contact usually means a missing feature or overflowed buffer.
 The official `doc/skills/parity/SKILL.md` shipped in the `mujoco` wheel describes a
 stage-by-stage method (`forward` isolation, contact matching).
+
+## Executed MJX and MuJoCo Warp examples
+
+Device data structures need static sizes, which is the root of most surprises.
+
+MJX (JAX). Executed on CPU; the same code runs on GPU/TPU:
+
+```python
+import jax, jax.numpy as jnp, mujoco
+from mujoco import mjx
+
+mx = mjx.put_model(mujoco.MjModel.from_xml_string(XML))   # impl="jax" by default
+dx0 = mjx.make_data(mx)
+
+def rollout(d, n_steps=250):
+    def body(d, _):
+        d = mjx.step(mx, d)
+        return d, d.qpos[2]
+    return jax.lax.scan(body, d, None, length=n_steps)
+
+vx = jax.random.uniform(jax.random.PRNGKey(0), (256,), minval=-1, maxval=1)
+batch = jax.vmap(lambda v: dx0.replace(qvel=dx0.qvel.at[0].set(v)))(vx)
+final, z_traj = jax.jit(jax.vmap(rollout))(batch)          # (256, 7), (256, 250)
+
+# Domain randomisation: vmap only the randomised field, then batch it via in_axes.
+gf = jax.vmap(lambda mu: mx.geom_friction.at[:, 0].set(mu))(jnp.linspace(0.2, 1.5, 256))
+mx_b = mx.tree_replace({"geom_friction": gf})
+in_axes = jax.tree_util.tree_map(lambda x: None, mx).tree_replace({"geom_friction": 0})
+stepped = jax.jit(jax.vmap(mjx.step, in_axes=(in_axes, 0)))(mx_b, batch)
+```
+
+Do not return a whole `mjx.Model` from a `vmap`ped function: every field gets a batch axis
+and stepping fails with a length-mismatch `IndexError` (hit while testing).
+
+MuJoCo Warp (executed on the Warp CPU device):
+
+```python
+import mujoco, mujoco_warp as mjw, numpy as np
+mjm = mujoco.MjModel.from_xml_string(XML); mjd = mujoco.MjData(mjm)
+nworld = 16
+m = mjw.put_model(mjm, batch_sizes={"geom_friction": nworld})   # per-world model field
+fr = np.tile(mjm.geom_friction[None], (nworld, 1, 1)); fr[:, :, 0] = np.linspace(0.3, 1.2, nworld)[:, None]
+m.geom_friction.assign(fr)
+d = mjw.put_data(mjm, mjd, nworld=nworld, nconmax=8, njmax=64)   # or mjw.make_data(...)
+for _ in range(300):
+    mjw.step(m, d)                     # in place; capture in a CUDA graph on GPU
+assert not np.any(d.overflow.numpy())  # buffers overflowed -> undefined behaviour
+mjw.get_data_into(mjd, mjm, d, world_id=3)
+```
+
+What differs from CPU MuJoCo (details and full tables in the sections above):
+
+- float32 on device vs float64 on CPU: stiff models that are fine on CPU can drift or NaN.
+- No `PGS` on any GPU path. `noslip`: MJX-JAX has no implementation and does **not** reject
+  `noslip_iterations > 0`, so it is silently ignored (verified in 4.0.1). MuJoCo Warp 4.0.1
+  implements it except with `discrete` (the MJX docs table still lists it as unsupported).
+- MJX-JAX additionally lacks constraint islands, plugins, flex, SDF, cylinder-box/mesh and
+  ellipsoid-box/mesh collisions, and `implicitfast` with fluid drag. `integrator="discrete"`
+  passes `put_model` but `mjx.step` raises `NotImplementedError` (verified).
+- MJX-JAX allocates contact slots for every geom pair that *could* collide; prune with
+  `contype`/`conaffinity`, `exclude`, explicit `<pair>`s, and the custom numerics
+  `max_contact_points` / `max_geom_pairs`. Keep hulls under ~32 vertices for mesh-mesh.
+  Lower `iterations`/`ls_iterations` (Newton often converges in 1-4).
+- MuJoCo Warp / MJX-Warp sizes contacts with `nconmax`/`naconmax` and constraints with
+  `njmax` (per world, hard cap); `<size nconmax njmax>` in XML is ignored. Excess contacts
+  are dropped and flagged in `d.overflow`. Read contacts through contact sensors.
+- MJX-Warp resets subsets of worlds with `data.where(done, reset_data)`, not `tree_map`.
+- A GPU step is slower than a CPU step; GPUs win on throughput. One env on MJX-JAX can be
+  ~10x slower than CPU MuJoCo (official figure).
+
+Playground 1.x environments are layered PyTorch modules (`reaf.simulation.torch`): a
+device layer binds joints/actuators/cameras/sensors to the model, a task layer supplies
+features, rewards and terminations, and an `EnvironmentReset` hook gets privileged model and
+data access for domain randomisation. Training: `python -m mujoco_playground.rl.rsl_rl.train
+--env=SO101PickCube`. For the older JAX `MjxEnv` / Brax workflow use `rss2025/`. Algorithm
+and reward choices belong to `robot-reinforcement-learning`.

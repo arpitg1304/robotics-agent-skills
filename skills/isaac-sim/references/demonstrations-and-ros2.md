@@ -5,6 +5,36 @@ Checked against Isaac Lab `v3.0.0` (`docs/source/features/imitation-learning/*.r
 2026-11-18. Not executed. Script flags change between releases, so run `--help` on each script
 before scripting a pipeline.
 
+## Quick pipeline (moved from SKILL.md)
+
+```bash
+# Teleop-record -> annotate subtasks -> multiply with Mimic (keyboard | spacemouse; XR: --xr on IK-Abs)
+uv run --extra teleop,isaacsim isaaclab teleop record --task IsaacContrib-Stack-Cube-Franka-IK-Rel \
+    --viz kit --teleop_device spacemouse --dataset_file ./datasets/dataset.hdf5 --num_demos 10
+uv run --extra isaacsim,mimic python scripts/imitation_learning/isaaclab_mimic/annotate_demos.py \
+    --task Isaac-Stack-Cube-Franka-IK-Rel-Mimic-v0 --viz kit --auto \
+    --input_file ./datasets/dataset.hdf5 --output_file ./datasets/annotated_dataset.hdf5
+uv run --extra isaacsim,mimic python scripts/imitation_learning/isaaclab_mimic/generate_dataset.py \
+    --task Isaac-Stack-Cube-Franka-IK-Rel-Mimic-v0 --num_envs 300 --generation_num_trials 1000 \
+    --input_file ./datasets/annotated_dataset.hdf5 --output_file ./datasets/generated_dataset.hdf5
+```
+
+- **Mimic needs task-space (end-effector) actions.** It replays subtask segments under rigid
+  transforms relative to a reference object, so convert joint-space data with FK first.
+  Mimic task IDs still end in `-v0`.
+- Only successful generated trials are kept. **Heuristic:** a success/attempt ratio below about
+  10% usually means bad annotations or subtasks that are too long.
+- **Format:** robomimic-style HDF5 (`data/demo_<i>/actions`, `obs/...`, `attrs["success"]`).
+  Train BC with `scripts/imitation_learning/robomimic/train.py`. Merge and convert with
+  `scripts/tools/` (`merge_hdf5_datasets.py`, `hdf5_to_mp4.py`, `mp4_to_hdf5.py` for Cosmos
+  augmentation).
+- **GR00T N1.5:** the humanoid locomanipulation SDG workflow fine-tunes it in a separate uv env
+  and converts HDF5 to LeRobot format. RLinf (`--rl_library rlinf`) does RL post-training of
+  VLAs.
+- Full pipeline (replay, visuomotor, SkillGen, XR, GR00T steps): the sections below. For
+  dataset QA use `robot-data-quality`, for conversion `lerobot`, and for policy choice
+  `imitation-learning`.
+
 ## Teleoperation devices
 
 - `--teleop_device keyboard | spacemouse`, available through `isaaclab teleop run|record|replay`
@@ -132,6 +162,23 @@ converting to LeRobot datasets.
   and `docs/source/experimental-features/rlinf_vla_posttraining.rst` in your checkout.
 
 ## ROS 2 bridge (Isaac Sim 6.2)
+
+Summary (moved from SKILL.md):
+
+- `isaacsim.ros2.bridge` in Isaac Sim 6.2 supports **Jazzy on Ubuntu 24.04 (recommended)** and
+  **Humble on 22.04**. Humble on 24.04 is unsupported.
+- Libraries: source your ROS 2 before launching, or leave `ROS_DISTRO` unset to use the bundled
+  libraries.
+- Match `ROS_DOMAIN_ID` and `RMW_IMPLEMENTATION` on both sides. Containers and remote hosts
+  need a UDP-only FastDDS profile.
+- OmniGraph publishers and subscribers (`ROS2PublishClock`, `ROS2PublishJointState`,
+  `ROS2SubscribeJointState`, `ROS2CameraHelper`, ...) run **only while the sim is playing**.
+  Publish `/clock` and use `use_sim_time:=true`.
+- Deploy learned policies as an ONNX export inside a ROS 2 node at the training control rate,
+  and use the bridge for single-robot integration tests, not for parallel RL. Details below;
+  ROS side: `ros2`, `docker-ros2-development`.
+
+Details:
 
 - Extensions: `isaacsim.ros2.bridge`, which depends on `isaacsim.ros2.core`, `.nodes`, `.ui`
   and `.examples`. Related extensions are `isaacsim.ros2.control`, `isaacsim.ros2.sim_control`,

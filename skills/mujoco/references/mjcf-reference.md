@@ -222,3 +222,53 @@ Only the last `<visual>` block counts; `offwidth`/`offheight` default 640 x 480.
 Tools: Menagerie READMEs document each model's conversion steps and are the best examples;
 `mujoco.MjSpec` replaces dm_control PyMJCF for programmatic editing; `spec.attach(...)`
 composes robots, grippers and scenes with name prefixes.
+
+## Rules that prevent most modelling bugs (full text)
+
+- **Angles**: `compiler/angle` defaults to `"degree"` for MJCF (always radian for URDF).
+  `range="-1.57 1.57"` without `angle="radian"` is +/-1.57 degrees. Set it explicitly.
+- **Asset paths**: `meshdir`/`texturedir`/`assetdir` are relative to the main model file.
+  Only the last `<visual>` block in a file counts; merge them.
+- **Mass and inertia**: `inertiafromgeom="auto"` (default) infers mass and inertia from geoms
+  only when a body has no `<inertial>`, using `density="1000"` (water) unless a geom sets
+  `mass`. Every geom in `inertiagrouprange` (default `"0 5"`) counts, including visual
+  geoms with `contype=conaffinity=0`: a body with a collision sphere (group 3) and an
+  identical visual sphere (group 2) compiled to **twice** the mass (verified). Fix with
+  `inertiagrouprange`, `density="0"` or `mass="0"` on one set, or explicit `<inertial>` from
+  CAD (preferred for real robots). `inertiafromgeom="true"` overrides imported nonsense
+  inertias; `boundmass`/`boundinertia` clamp tiny URDF dummy links; `balanceinertia` fixes
+  triangle-inequality violations.
+- **Defaults classes**: `<default class="x">` nests; children inherit from parents;
+  elements select with `class="x"`, and `childclass` on a body applies to its subtree. The
+  top-level default is the place to change MuJoCo's dated physics defaults once.
+- **Joints**: `type` is `hinge` (default), `slide`, `ball`, `free` (or `<freejoint/>`).
+  `armature` (reflected rotor inertia, I_rotor x gear^2) and `damping` default to 0 and should
+  almost never be 0 on a geared robot joint. Since 3.7.0 `damping` and `stiffness` accept up
+  to three polynomial coefficients; XML `damping="0.1"` still works, but in `MjSpec` assign a
+  3-vector (`joint.damping = [0.1, 0, 0]`; a scalar raises `TypeError`). `frictionloss` (dry friction) adds a constraint
+  row per joint; use it where stiction matters.
+- **Actuators** (shortcuts of `<general>`): `motor` (torque = gear x ctrl), `position`
+  (`kp` default 1, `kv` default 0, or `dampratio`; `timeconst` adds a filter;
+  `inheritrange="1"` copies the joint range into `ctrlrange`), `velocity`, `intvelocity`,
+  `damper`, `cylinder`, `muscle`, `adhesion`, plus newer `pid` (pos/vel setpoints, `ki`,
+  `imax`, `slewmax`), `dcmotor` and `orientation`. A position actuator compiles to
+  `gainprm[0]=kp`, `biasprm[1:3]=[-kp, -kv]`. Always set `forcerange` (unlimited by default)
+  and keep `ctrlrange` inside the joint `range` except on grippers. Actuators also accept
+  `armature`, `damping` (reflected through `gear`), and `delay`/`nsample` for control latency.
+- **Collision filtering**: two geoms can collide iff
+  `(contype1 & conaffinity2) || (contype2 & conaffinity1)`; both default to 1. Geoms in the
+  same body never collide; parent-child bodies are excluded by default (`filterparent`).
+  Use `<contact><exclude body1 body2/></contact>` for specific pairs and `<pair>` to
+  force a pair with custom `condim`/`friction` (5 values)/`solref`/`solimp`.
+- **Equality constraints**: `connect` (ball joint between bodies), `weld` (6-DoF lock; the
+  standard way to drive a free body from a `mocap="true"` body), `joint` (polynomial joint
+  coupling, e.g. mirrored gripper fingers), `tendon`, `flex`. Soften with `solref`/`solimp`.
+- **Keyframes**: `<key name qpos qvel act ctrl mpos mquat time/>`; note mocap fields are
+  `mpos`/`mquat`. Missing entries fall back to `qpos0`/zeros. Re-record keyframes whenever
+  you add or remove joints: `qpos` is positional.
+- **Sensors** write fixed slots into `data.sensordata`. Use them (not `data.contact`) for
+  observations: `<contact>` sensors (since 3.3.5) give a fixed-size, filtered, sorted view of
+  contacts (`geom1/geom2/body1/body2/subtree1/site`, `num`, `data="found force ..."`,
+  `reduce="mindist|maxforce|netforce"`); `touch` sums normal force inside a site volume.
+  The sensor `noise` attribute **does not affect simulation**; it only stores a standard
+  deviation. Add noise yourself.

@@ -207,6 +207,52 @@ Read and write (manual RoboDM install). Reader concatenates state-like and actio
 dict order and synthesises timestamps at a hard-coded 30 Hz. Writer drops language, timestamps
 and per-episode metadata; `codec_options` in the writer config is never used.
 
+## Conversion pitfalls at a glance
+
+forge converts through one canonical `Episode`/`Frame` model: one state vector, one action
+vector, images, timestamps, language, and a few flags per frame. Anything else is dropped,
+and the reader decides which source keys become state and action by name heuristics. forge
+performs **no unit, rotation or frame-convention conversion**. The most consequential
+behaviours at this commit (details per format below):
+
+| Area | What forge does | What to do |
+|---|---|---|
+| State/action selection | Name heuristics per reader; YAML `fields:` mapping is parsed but **not applied** | Check `forge inspect` dims; preprocess the source if the wrong key wins |
+| Dropped observation keys | robomimic: only `robot0_joint_pos` + `robot0_eef_pos`; Zarr: only `state`/`robot_state`/`robot0_eef_pos`; ALOHA: `qpos` only | Expect a smaller state; concatenate upstream if you need more |
+| rosbag | Whole bag is one episode; only first image topic; **no state or action** | Use MCAP with a topic config for training data |
+| FPS | Zarr, HDF5, RLDS carry none (fallback 30); MCAP inspect FPS counts all topics; LeRobot v3 writer casts FPS to int | Always pass `--fps` to `convert` and `quality` |
+| Timestamps | MCAP and rosbag timestamps are absolute and not rebased | Rebase in your loader if it assumes t0 = 0 |
+| Episode boundaries | Zarr without `episode_ends` = one episode; MCAP needs a strategy (`marker`, `time_gap`, `segment`) | Verify episode count and length distribution after conversion |
+| Images | LeRobot v3 output is H.264 CRF 23 yuv420p (lossy); RLDS output JPEG q95 and multiplies non-uint8 by 255; raw ROS/MCAP images have no BGR swap; uint16 depth wraps when cast to uint8 | Compare frames visually; keep depth out of RGB paths |
+| Decode failures | LeRobot v2 reader returns black frames silently; MCAP compressed decode failure returns raw bytes; LeRobot v3 reader raises | Run `--video` checks on the source and the output |
+| Language | RLDS reads only episode-level `language_instruction` (Open-X stores it per step); LeRobot v2 reader reads none; MCAP writer writes none; LeRobot v3 writer writes `"default"` when missing | `forge lint` the output |
+| Metadata | Joint names (`names: None`), success labels, rewards, done flags, episode metadata dropped by the LeRobot v3 writer; RLDS writer sets reward 0.0 and discount 1.0 | Keep a sidecar with labels and splits keyed by episode index |
+| v2 vs v3 detection | A LeRobot v2.x dataset with `meta/tasks.jsonl` is detected and read as `lerobot-v3` | Pass `--source-format` if results look wrong |
+| robomimic splits | `/mask/train`, `/mask/valid` dropped; only the first HDF5 file is read | Save masks before converting; convert files separately |
+| RLDS last step | The `is_last` step's action is meaningless per RLDS but passed through | Drop or mask it for (obs, action) training pairs |
+| YAML `video:` settings | Not applied; use `writer_config: {video_crf: 20}` | Check the written config with `--dry-run` |
+
+```yaml
+# conversion.yaml: keys the converter really applies
+target_format: lerobot-v3
+fps: 15
+robot_type: franka
+cameras:
+  agentview_image: front
+  robot0_eye_in_hand_image: wrist
+writer_config:
+  video_crf: 18
+```
+
+```bash
+forge convert ./demo.hdf5 ./out --config conversion.yaml --dry-run
+forge convert ./demo.hdf5 ./out --config conversion.yaml --workers 4
+```
+
+After every conversion run the round-trip verification at the end of this file:
+episode counts, lengths, dims, per-dim stats, FPS, task coverage and camera names must match,
+and video checks must not show new defects.
+
 ## Conversion config (YAML) reality check
 
 `forge inspect ds --generate-config c.yaml`, then `forge convert ds out --config c.yaml`.

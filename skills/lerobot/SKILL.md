@@ -24,33 +24,18 @@ quickly between minor versions, so check what is installed before trusting any f
 source or docs as **verified**. It marks recommendations that come from field experience as
 **advice**.
 
-## When to Use This Skill
-- Installing LeRobot, or picking extras for a robot, policy or simulator
-- Bringing up an SO-100/SO-101 (or Koch, OMX, LeKiwi, OpenArm, ...) arm: ports, motor IDs,
-  calibration, teleoperation, cameras
-- Recording teleoperated demonstrations with `lerobot-record`, resuming a recording, pushing it to the Hub
-- Inspecting, loading, visualising, editing, merging or converting `LeRobotDataset` data
-- Training ACT / Diffusion / SmolVLA / pi0.5 / other policies with `lerobot-train`, and resuming runs
-- Deploying a policy on the real robot with `lerobot-rollout` (sync, RTC, remote inference)
-- Evaluating in simulation with `lerobot-eval`
-- Debugging calibration, camera, timestamp, normalisation and feature-name failures
-
 **Use a sibling skill instead for:** choosing an IL algorithm, action representation or data
 budget (`imitation-learning`). Auditing demo quality, outliers or label noise (`robot-data-quality`).
 RL theory and reward design (`robot-reinforcement-learning`). Building MuJoCo or Isaac scenes
-(`mujoco`, `isaac-sim`).
+(`mujoco`, `isaac-sim`). Full scope list, pipeline diagram and draccus flag syntax:
+[overview.md](references/overview.md).
 
-## Mental Model
+**Flags (verified):** every CLI is a draccus dataclass. Nested fields are dotted flags
+(`--robot.port`, `--policy.chunk_size`), `type` fields pick a registered subclass
+(`--robot.type=so101_follower`), and dicts and lists are passed as YAML/JSON strings.
+**`<command> --help` is the ground truth for the installed version.**
 
-```
- HARDWARE                      DATA                           LEARNING                 DEPLOY
- so101_leader ─┐
-               ├─ lerobot-record ─► LeRobotDataset v3 ─► lerobot-train ─► checkpoint ─► lerobot-rollout (robot)
- so101_follower┘   (teleop loop)    parquet + mp4 + meta/  (draccus CLI)   config.json     base|episodic|sentry|
- + cameras                          local cache <-> Hub                    model.safetensors highlight|dagger
- (calibration JSON per id)          ~/.cache/huggingface/lerobot/<repo>    pre/postprocessor ─► lerobot-eval (sim)
-                                                                           train_config.json
-```
+## Contracts Between Stages
 
 Six things tie the stages together. When one changes, the next stage breaks:
 
@@ -62,14 +47,6 @@ Six things tie the stages together. When one changes, the next stage breaks:
 | Camera resolution and `fps` | camera config, `--dataset.fps`, `--fps` | deployment differs from training, or the loop cannot keep the rate |
 | Joint units (`use_degrees`) | robot/teleop config | dataset in one unit, robot in another |
 | Normalisation stats | dataset `meta/stats.json`, copied into checkpoint processors | stats missing, or taken from the wrong dataset |
-
-**Config system (verified):** every CLI is a [draccus](https://github.com/dlwh/draccus) dataclass.
-Nested fields become dotted flags: `--robot.port`, `--dataset.repo_id`, `--policy.chunk_size`,
-`--strategy.type`. `type` fields choose a registered subclass (`--robot.type=so101_follower`,
-`--policy.type=act`). Dicts and lists are passed as YAML/JSON strings
-(`--robot.cameras="{ top: {...} }"`, `--dataset.episodes='[0,1,2]'`). `lerobot-train` also takes
-`--config_path=<file.json|yaml|Hub repo>`, and CLI flags override the file. **Every command
-supports `--help`, and that is the ground truth for the installed version.**
 
 ## Check What You Have First
 
@@ -111,7 +88,7 @@ git clone https://github.com/huggingface/lerobot && cd lerobot && pip install -e
 - Linux torch wheels from PyPI are CUDA 13 builds and need NVIDIA driver >= 580.65. For an older
   driver, install torch from the `cu126` index first (see `docs/source/installation.mdx`).
 - Apple Silicon: MPS needs macOS 15+. On macOS 14, LeRobot falls back to CPU.
-- Load [references/policies.md](references/policies.md) for the policy-to-extra table.
+- Load [policies.md](references/policies.md) for the policy-to-extra table.
 
 ## SO-101 Bring-Up (follower + leader, wrist + overhead camera)
 
@@ -140,10 +117,7 @@ lerobot-setup-motors --teleop.type=so101_leader  --teleop.port=$LEADER_PORT
 ```
 The script asks for one motor at a time, starting with `gripper` (ID 6) and ending at
 `shoulder_pan` (ID 1). **Only that motor can be connected to the board.** It writes the ID and
-baudrate to EEPROM. On a Waveshare board, set both jumpers to channel `B` (USB). The SO-101
-leader uses mixed gear ratios: 1/191 for pan and elbow, 1/345 for shoulder lift, 1/147 for the
-wrist and gripper. The follower uses 6 × STS3215 at 1/345. A wrong-geared motor on the leader
-feels stiff or sags.
+baudrate to EEPROM. Waveshare jumpers, gear ratios: [so101-hardware.md](references/so101-hardware.md).
 
 ### 3. Calibration
 ```bash
@@ -159,15 +133,8 @@ Procedure (verified from `SerialMotorsBus.record_calibration`):
    - follower: `~/.cache/huggingface/lerobot/calibration/robots/so_follower/<robot.id>.json`
    - leader: `~/.cache/huggingface/lerobot/calibration/teleoperators/so_leader/<teleop.id>.json`
 
-   The directory comes from the class `name` (`so_follower`/`so_leader`), not from the `--robot.type`
-   string. Override the root with `HF_LEROBOT_CALIBRATION` or `HF_LEROBOT_HOME`, or set
-   `--robot.calibration_dir`.
-
-If a file for that id exists, connect/calibrate asks: *"Press ENTER to use provided calibration file
-... or type 'c' ... to run calibration"*. ENTER writes the saved file to the motors. When the motor
-registers do not match the file, `connect()` starts calibration on its own. **Commit or back up
-these JSON files next to your datasets.** A policy is only valid with the calibration its data was
-recorded under.
+**Commit or back up these JSON files next to your datasets.** A policy is only valid with the
+calibration its data was recorded under. Dir overrides, reuse prompt: [so101-hardware.md](references/so101-hardware.md).
 
 ### 4. Teleoperate (check calibration before adding cameras)
 ```bash
@@ -191,27 +158,10 @@ same from recording to deployment:
 export CAMERAS='{ wrist: {type: opencv, index_or_path: /dev/video2, width: 640, height: 480, fps: 30, fourcc: MJPG}, top: {type: opencv, index_or_path: /dev/video0, width: 640, height: 480, fps: 30, fourcc: MJPG} }'
 lerobot-teleoperate ... --robot.cameras="$CAMERAS" --display_data=true   # Rerun viewer
 ```
-- OpenCV config fields (verified): `index_or_path` (int or path), `fps`, `width`, `height`,
-  `color_mode` (rgb), `rotation` (0/90/180/-90), `warmup_s`, `fourcc`, `backend`. If the camera
-  rejects the requested `fps`, `width` or `height`, connect raises `RuntimeError: ... failed to set
-  fps=...` (or `capture_width`). A rejected `fourcc` only logs a warning ("Continuing with
-  default format"), so check the log when you rely on MJPG for bandwidth. Use the exact
-  fps/resolution profile that `lerobot-find-cameras` reports as supported.
-- On Linux, `find_cameras` scans `/dev/video*`. **Advice:** a UVC camera often registers two
-  nodes, so a second camera is usually `/dev/video2`, not `/dev/video1`. Use
-  `/dev/v4l/by-id/...` or `/dev/v4l/by-path/...` so names survive a reboot. On macOS, indices
-  move when an iPhone Continuity Camera or a new webcam shows up. Run `lerobot-find-cameras`
-  again after any USB change.
-- **Advice (USB bandwidth):** two uncompressed YUYV 640×480@30 streams on one hub can saturate it.
-  Use `fourcc: MJPG`, put the cameras on separate root ports, and keep 640×480. The docs also
-  call 640×480 at 30 fps enough for most tasks.
-- RealSense: `{type: intelrealsense, serial_number_or_name: "233522074606", width: 640, height: 480, fps: 30, use_depth: true}`
-  adds a `<name>_depth` feature.
 - Mount both cameras rigidly and light the scene evenly. A wrist camera mount that moves between
   sessions is a silent distribution shift.
-
-Load [references/robots.md](references/robots.md) for SO-100, bimanual SO, Koch, OMX, LeKiwi,
-OpenArm and other robots.
+- Camera fields, stable `/dev/v4l` names, USB bandwidth, RealSense: [so101-hardware.md](references/so101-hardware.md).
+  Other robots (SO-100, bimanual, Koch, OMX, LeKiwi, OpenArm, ...): [robots.md](references/robots.md).
 
 ## Recording Datasets
 
@@ -230,14 +180,10 @@ lerobot-record \
   --display_data=true
 ```
 - Keys (verified): `→`/`n` ends the episode or reset early. `←`/`r` re-records the episode.
-  `ESC`/`q` stops, encodes and uploads. If no global key backend exists (Wayland, SSH, macOS
-  without Accessibility), the same keys are read from the focused terminal.
+  `ESC`/`q` stops, encodes and uploads.
 - The saved name is `${HF_USER}/so101_cube_to_bowl_YYYYMMDD_HHMMSS`. Find it with
   `ls ~/.cache/huggingface/lerobot/${HF_USER}` and use **that full name** for resume, train and
   replay.
-- Defaults: `fps=30`, `episode_time_s=60`, `reset_time_s=60`, `num_episodes=50`, `video=true`,
-  `push_to_hub=true`, `streaming_encoding=false`. Use `--dataset.private=true` and
-  `--dataset.tags='["so101"]'` as needed.
 - **Resume** an interrupted session or add episodes. Here `num_episodes` means *additional*
   episodes:
   ```bash
@@ -255,7 +201,7 @@ lerobot-record \
 - Replay to check repeatability:
   `lerobot-replay --robot.type=so101_follower --robot.port=$FOLLOWER_PORT --robot.id=$FOLLOWER_ID --dataset.repo_id=<full_name> --dataset.episode=0`
 
-## Dataset Format and Tools (v3.0)
+## Dataset Format (v3.0)
 
 ```
 <root>/                        # default $HF_LEROBOT_HOME/<repo_id> = ~/.cache/huggingface/lerobot/<repo_id>
@@ -268,35 +214,8 @@ lerobot-record \
 ```
 SO-101 features (verified pattern): `action` and `observation.state` are float32 vectors with
 `names` `[shoulder_pan.pos, shoulder_lift.pos, elbow_flex.pos, wrist_flex.pos, wrist_roll.pos, gripper.pos]`.
-Images are `observation.images.<camera_name>`. Bookkeeping columns are `timestamp`, `frame_index`,
-`episode_index`, `index` and `task_index`.
-
-```python
-from lerobot.datasets import LeRobotDataset, LeRobotDatasetMetadata
-
-meta = LeRobotDatasetMetadata("user/so101_cube_to_bowl_20261118_143012")   # metadata only, cheap
-print(meta.fps, meta.robot_type, meta.total_episodes, meta.total_frames, meta.camera_keys)
-print(meta.features["action"]["names"], meta.stats["action"]["mean"])
-
-ds = LeRobotDataset(meta.repo_id, episodes=[0, 1],
-                    delta_timestamps={"action": [i / meta.fps for i in range(50)]})  # 50-step action chunks
-item = ds[0]          # dict of tensors; images (C,H,W) float in [0,1]; item["action"].shape == (50, 6)
-```
-- Visualise in the browser at `https://huggingface.co/spaces/lerobot/visualize_dataset?path=/<repo_id>/episode_0`.
-  Locally, run `lerobot-dataset-viz --repo-id <id> --episode-index 0`, adding
-  `--root <dir> --mode local` for a local dataset or `--display-mode foxglove` for Foxglove.
-- Edit with `lerobot-edit-dataset --repo_id <id> --operation.type <op>`. The ops are
-  `delete_episodes`, `split`, `merge`, `remove_feature`, `modify_tasks`,
-  `convert_image_to_video`, `recompute_stats`, `reencode_videos` and `info`. Add `--new_repo_id`
-  to keep the original, and `--push_to_hub true` to upload. `modify_tasks` always works in
-  place. Merging needs identical features.
-- Convert v2.1 to v3.0 with `python -m lerobot.scripts.convert_dataset_v21_to_v30 --repo-id=<id>`.
-  It also takes `--root`, `--push-to-hub=false` and `--force-conversion`.
-- If you write datasets from Python, call **`dataset.finalize()` before `push_to_hub()`**.
-  Without it the parquet footers are never written and the files are corrupt.
-
-Load [references/dataset-format.md](references/dataset-format.md) for `info.json` fields,
-streaming, image transforms, editing recipes and the Python editing API.
+Images are `observation.images.<camera_name>`. Bookkeeping columns, Python loading, visualiser,
+`lerobot-edit-dataset` ops, v2.1 conversion and `finalize()`: [dataset-format.md](references/dataset-format.md).
 
 ## Training
 
@@ -316,38 +235,9 @@ lerobot-train \
   28k–56k steps. When you shorten the run, also shorten `--save_freq`. For policies with a decay
   schedule (smolvla, pi0/pi05, ...), set `--policy.scheduler_decay_steps≈--steps`. Otherwise the
   LR never decays.
-- `--policy.type=X` builds a fresh policy whose input and output features come from the dataset.
-  `--policy.path=<repo|dir>` fine-tunes a checkpoint and reads the type and config from it.
-- `--policy.push_to_hub` defaults to **true**. It needs `--policy.repo_id`, or pass
-  `--policy.push_to_hub=false`.
-- An existing `--output_dir` without `--resume=true` raises `FileExistsError`. Resume with:
-  ```bash
-  lerobot-train --config_path=outputs/train/act_so101_cube_to_bowl/checkpoints/last/pretrained_model/train_config.json --resume=true
-  lerobot-train --config_path=${HF_USER}/act_so101_cube_to_bowl --resume=true   # Hub, needs --save_checkpoint_to_hub=true during training
-  ```
-- Checkpoints go in `<output_dir>/checkpoints/<step>/pretrained_model/` (plus `last`). Each holds
-  `config.json`, `model.safetensors`, `train_config.json`, and the pre/post-processor pipelines
-  with their normalisation stats.
-- Trackio is local by default; open it with `trackio show --project lerobot`. Use
-  `--trackio.space_id=<user>/<space>` to sync to a Space. That is required for HF Jobs
-  (`--job.target=a10g-small`). List hardware with `hf jobs hardware`.
-- Devices: `cuda`, `mps`, `cpu`, `xpu`. On ROCm, `cuda` is used. Multi-GPU:
-  `accelerate launch --num_processes=N $(which lerobot-train) ...`. **Advice:** MPS works for ACT
-  but is slow (the docs estimate about 6–14 h for 5 epochs). For big VLAs, rent a GPU.
-- SmolVLA fine-tune: `smolvla_base` expects cameras `camera1..3`, so map your names:
-  ```bash
-  lerobot-train --policy.path=lerobot/smolvla_base --policy.repo_id=${HF_USER}/smolvla_so101_cube \
-    --dataset.repo_id=${HF_USER}/so101_cube_to_bowl_20261118_143012 \
-    --rename_map='{"observation.images.top": "observation.images.camera1", "observation.images.wrist": "observation.images.camera2"}' \
-    --batch_size=64 --steps=20000 --policy.device=cuda --trackio.enable=true
-  ```
-- Key ACT knobs (verified defaults): `chunk_size=100`, `n_action_steps=100`, `n_obs_steps=1`,
-  `vision_backbone=resnet18`, `use_vae=true`, `kl_weight=10`, `optimizer_lr=1e-5`,
-  `temporal_ensemble_coeff=None`.
 
-Load [references/policies.md](references/policies.md) for the policy list, extras, VRAM groups and
-policy-specific gotchas. Load [references/cli-reference.md](references/cli-reference.md) for
-the full flag tables.
+Resume, checkpoints, devices, SmolVLA fine-tune (camera renaming) and ACT defaults:
+[training.md](references/training.md). Policy choice: [policies.md](references/policies.md).
 
 ## Deployment on the Real Robot (`lerobot-rollout`)
 
@@ -358,26 +248,7 @@ lerobot-rollout --strategy.type=base \
   --robot.type=so101_follower --robot.port=$FOLLOWER_PORT --robot.id=$FOLLOWER_ID \
   --robot.cameras="$CAMERAS" \
   --task="Pick up the red cube and place it in the bowl" --duration=60 --display_data=true
-
-# Scored evaluation episodes, recorded; leader drives resets
-lerobot-rollout --strategy.type=episodic \
-  --policy.path=${HF_USER}/act_so101_cube_to_bowl \
-  --robot.type=so101_follower --robot.port=$FOLLOWER_PORT --robot.id=$FOLLOWER_ID --robot.cameras="$CAMERAS" \
-  --teleop.type=so101_leader --teleop.port=$LEADER_PORT --teleop.id=$LEADER_ID \
-  --dataset.repo_id=${HF_USER}/rollout_act_cube_to_bowl \
-  --dataset.single_task="Pick up the red cube and place it in the bowl" \
-  --dataset.num_episodes=10 --dataset.episode_time_s=30 --dataset.reset_time_s=15
 ```
-- Strategies (verified): `base` runs without recording. `episodic` records episodes like
-  `lerobot-record`. `sentry` records continuously and uploads every N episodes. `highlight` keeps a
-  ring buffer and saves when you press a key. `dagger` is human-in-the-loop correction and needs
-  `--teleop.type`.
-- Recorded rollout datasets must be named `rollout_*`, and a timestamp is appended.
-  `--dataset.fps` must equal `--fps` (default 30).
-- `--policy.<field>=` overrides the checkpoint config at load time. For example,
-  `--policy.n_action_steps=20` re-plans more often. `--device` overrides the device.
-  `--return_to_initial_position` (default true) moves the arm back to its startup pose on exit.
-  `--interactive=true` waits for `/start` (base and sentry).
 - **Action chunks:** ACT runs `n_action_steps` actions open-loop. At the default 100 steps and
   30 fps that is 3.3 s blind. For reactive tasks, lower it, or use temporal ensembling with
   `--policy.temporal_ensemble_coeff=0.01 --policy.n_action_steps=1`, which queries every step.
@@ -390,113 +261,32 @@ lerobot-rollout --strategy.type=episodic \
   far any joint target can jump in one step (units follow `use_degrees`). Keep a hand on the
   follower's power switch.
 
-Inference from your own Python loop (verified API, from `examples/tutorial/act/act_using_example.py`):
-```python
-from lerobot.datasets import LeRobotDatasetMetadata
-from lerobot.policies import make_pre_post_processors
-from lerobot.policies.act import ACTPolicy
-from lerobot.policies.utils import build_inference_frame, make_robot_action
+Recorded `episodic` evaluation, other strategies, overrides, Python inference loop, processors:
+[deployment.md](references/deployment.md). Sim eval and HIL-SERL:
+[sim-and-rl.md](references/sim-and-rl.md).
 
-policy = ACTPolicy.from_pretrained(MODEL_ID).to("cuda").eval()
-meta = LeRobotDatasetMetadata(DATASET_ID)           # features/names of the training data
-pre, post = make_pre_post_processors(policy.config, pretrained_path=MODEL_ID)  # stats saved with the checkpoint
-policy.reset()                                       # clear the action queue at every episode start
-obs = robot.get_observation()
-frame = build_inference_frame(observation=obs, ds_features=meta.features, device="cuda")
-action = post(policy.select_action(pre(frame)))
-robot.send_action(make_robot_action(action, meta.features))
-```
-
-## Simulation Evaluation (`lerobot-eval`)
-
-```bash
-pip install 'lerobot[pusht]'      # or aloha, metaworld, libero (Linux)
-lerobot-eval --policy.path=<policy_repo_or_dir> --env.type=pusht \
-  --eval.n_episodes=50 --eval.batch_size=10 --policy.device=cuda --output_dir=outputs/eval/pusht
-```
-Registered env types (verified) include `pusht`, `aloha`, `libero`, `libero_plus`, `metaworld`,
-`robocasa`, `robotwin`, `vlabench`, `isaaclab_arena`, `envhub` and `unitree_g1_mujoco`. Some
-need manual installs; see `docs/source/<env>.mdx`. `--rename_map` maps env camera names to
-policy names. `--robot.type=sim` with `lerobot-rollout` runs the same rollout loop against a sim
-env. For building the simulator itself, see `mujoco` / `isaac-sim`.
-
-## Processors (pipelines)
-
-Since the normalisation refactor (PR #1452), policies no longer embed normalisation. Each checkpoint
-ships a **preprocessor**: rename, add batch dim, move to device, normalise, plus policy steps such
-as tokenisation. It also ships a **postprocessor**: unnormalise, move to CPU. The pattern is
-`preprocessor(batch) -> policy.select_action -> postprocessor(action)`. Robot-side
-`RobotProcessorPipeline`s sit between hardware and dataset. `make_default_processors()` returns
-identity teleop-action, robot-action and robot-observation pipelines. The `so100_to_so100_EE`
-example shows end-effector teleop with kinematics. A model trained before #1452 has stats in its
-weights and must be migrated:
-`python src/lerobot/processor/migrate_policy_normalization.py --pretrained-path <repo> --push-to-hub --branch migrated`.
-See `docs/source/introduction_processors.mdx` and `debug_processor_pipeline.mdx`.
-
-## HIL-SERL / RL in LeRobot
-
-LeRobot ships HIL-SERL: a SAC-style actor/learner, a reward classifier and human interventions
-by gamepad. It needs `lerobot[hilserl]`, an NVIDIA GPU, and a URDF for end-effector bounds. The
-entry points are `python -m lerobot.rl.gym_manipulator --config_path rl/env_config.json`
-(record, test), `lerobot-train --config_path reward_classifier_train_config.json`, and
-`python -m lerobot.rl.learner` / `python -m lerobot.rl.actor --config_path rl/train_config.json`.
-Get the example configs with
-`hf download lerobot/config_examples rl/env_config.json rl/train_config.json --repo-type dataset --local-dir .`.
-`lerobot-find-joint-limits` helps set the bounds. For algorithm choices, rewards and safety
-envelopes, use `robot-reinforcement-learning`. For the exact config schema, read
-`docs/source/hilserl.mdx` for your version.
-
-## Failure Modes and Anti-Patterns
+## Common Failure Modes
 
 | # | Symptom | Cause | Fix |
 |---|---|---|---|
 | 1 | Follower holds a constant offset from the leader, the gripper never fully closes, or calibration runs again on every command | Different `--robot.id`/`--teleop.id` between commands (each id is its own JSON), calibration not done at mid-range, or files deleted | Use one id everywhere (put it in env vars). `ls ~/.cache/huggingface/lerobot/calibration/*/*/`. Recalibrate *both* arms, moving to true mid-range |
 | 2 | A policy that worked yesterday is now off by a few degrees per joint | Recalibrated after recording, so the new zero no longer matches the data | Treat calibration JSON as part of the dataset: back it up, never recalibrate mid-project. If you must, restore the old file (ENTER at the prompt writes it to the motors) or re-record |
-| 3 | Replayed or deployed motions are scaled or flipped, e.g. a joint goes to ±100 instead of ±30° | Units mismatch: SO arms default to `use_degrees=true` (degrees, gripper 0–100). `use_degrees=false` gives −100..100. Koch/OMX default to `false`. Pre-PR #777 data used a different zero | Check `meta.stats["observation.state"]` min/max, then set `--robot.use_degrees`/`--teleop.use_degrees` to match the dataset. For pre-#777 data, see `examples/backward_compatibility/replay.py` |
 | 4 | Cadence summary below target, jerky video, or duplicate frames | Slow cameras or USB saturation. `get_observation()` uses `read_latest()`, which returns a buffered frame up to 500 ms old, so a stalling camera **duplicates frames silently** | Fix it before recording 50 episodes: `fourcc: MJPG`, 640×480, separate USB ports, `--display_data=false`, `--dataset.streaming_encoding=true`. Check "Encoder queue full ... dropped N frame(s)" warnings |
 | 5 | `FrameTimestampError: One or several query timestamps unexpectedly violate the tolerance` while training | A video stream is shorter than or out of sync with the parquet (dropped encoder frames, crash during encoding, edited file) | Open that episode in the visualiser. Remove it with `lerobot-edit-dataset --operation.type delete_episodes`. Raising `--tolerance_s` (default `1e-4`) only hides the problem |
-| 6 | The dataset will not load after a crash, or parquet errors | Recording died before `finalize()` (power loss, kill -9). `lerobot-record` finalizes on normal exit and on Ctrl-C | Try `--resume=true` with the full stamped `repo_id`/`root`. If the files stay unreadable, restore the last pushed Hub revision or re-record the session. In custom scripts, call `finalize()` in a `finally:` block |
-| 7 | `BackwardCompatibilityError ... in v2.1 format` | v2.1 dataset read by v3 code | `python -m lerobot.scripts.convert_dataset_v21_to_v30 --repo-id=<id>`. If it is already converted on the Hub, delete the stale local cache |
-| 8 | `ForwardCompatibilityError` | Dataset is newer than your LeRobot | Upgrade LeRobot |
-| 9 | `ValueError: QUANTILES normalization mode requires q01 and q99 stats` (pi0.5) | Older dataset stats have no quantiles | `lerobot-edit-dataset --operation.type recompute_stats --operation.overwrite true`, then train with `--dataset.root` pointing at the result. Or pass `--policy.normalization_mapping='{"ACTION":"MEAN_STD","STATE":"MEAN_STD","VISUAL":"IDENTITY"}'` |
-| 10 | Fine-tuned policy outputs saturated or tiny actions | Wrong stats: processors built from another dataset, a merged dataset with unrecomputed stats, or an old model with embedded normalisation | Load processors from the checkpoint (`pretrained_path=`). Run `recompute_stats` after merges. Migrate pre-#1452 models |
 | 11 | `Visual feature mismatch between policy and robot hardware` at rollout, or a feature mismatch at train | Camera names differ (`front` vs `top`, or `camera1` for SmolVLA base) | Reuse the exact `$CAMERAS` string. Otherwise add `--rename_map='{"observation.images.top": "observation.images.camera1"}'` (observation keys only) |
 | 12 | Deployed policy behaves well for about a second, then drifts or overshoots | Open-loop chunk execution (ACT 100 steps), or sync inference stalls at chunk boundaries | `--policy.n_action_steps=20–50`, temporal ensembling, RTC, or remote inference. Check that `infer` in the rollout cadence fits the budget |
-| 13 | Motors hot, gripper weak after minutes, overload shutdowns | Gripper squeezing an object or a joint held against a hard stop. Only the gripper gets torque limits in `configure()` (Max_Torque_Limit 500, Protection_Current 250) | Don't grasp past contact during demos. Let the arm rest between sessions (`disable_torque_on_disconnect=true` is the default). Use a power supply that matches the STS3215 voltage variant (advice) |
 | 14 | `Incorrect status packet!` or intermittent read failures | Loose 3-pin daisy chain, weak supply, many joints moving at once | The SO configs retry `num_read_retries=2` times. Reseat the cables, check power. Raise `--robot.num_read_retries` only once the wiring is known good |
 | 15 | `Repository not found` / dataset not found at train time | Used the unstamped `repo_id` | Use the `_YYYYMMDD_HHMMSS` name, or record with `--dataset.no_stamp=true` |
-| 16 | `'repo_id' argument missing` at train | `policy.push_to_hub` defaults to true | Add `--policy.repo_id=...` or `--policy.push_to_hub=false` |
-| 17 | Old tutorial command fails on `--policy.path` with `lerobot-record`, `eval_` prefix, or `--wandb.*` | API moved in 0.6/0.7 | Use `lerobot-rollout`, `rollout_*` names and `--trackio.*` |
-| 18 | Language policy ignores the instruction, or success drops | `--task` at deploy differs from `single_task` in the data | Copy the exact task string. `lerobot-edit-dataset --operation.type modify_tasks` fixes typos in the data |
+
+Row numbers match the full table in [troubleshooting.md](references/troubleshooting.md), which has
+the other rows (units, crash recovery, v2.1/v3, q01/q99 stats, overheating, old flags, task
+strings), more anti-patterns and the debugging playbook.
 
 Anti-patterns:
 - **Recording 50 episodes before checking one.** Record 2, replay one, open it in the visualiser,
   read the cadence summary, then scale up.
 - **Changing camera placement, resolution or names between sessions of one dataset.** Resume
   rejects the feature change, and a policy cannot learn from a moving mount.
-- **Training on the default 100k steps** for a 45k-frame dataset with a schedule tuned for longer runs.
-- **Hand-editing `meta/*.json`/parquet.** Use `lerobot-edit-dataset` or `lerobot.datasets.dataset_tools`.
-  They keep offsets, stats and `info.json` consistent.
-- **Copying flags from memory or from a blog post.** Run `<command> --help` for the installed version.
-
-## Debugging Playbook
-
-1. **Environment:** run `lerobot-info`. Paste it in issues, and check torch, torchcodec and
-   ffmpeg pairing (torchcodec import failures show up here).
-2. **Bus:** run `lerobot-find-port`, check the power LED, and run `lerobot-teleoperate` with no
-   cameras. If that fails, the problem is motors or calibration, not ML.
-3. **Calibration:** `cat ~/.cache/huggingface/lerobot/calibration/robots/so_follower/$FOLLOWER_ID.json`.
-   No `range_min == range_max` is allowed (normalise raises "min and max are equal").
-4. **Cameras:** run `lerobot-find-cameras opencv` and look at `outputs/captured_images`. Then
-   teleoperate with `--display_data=true` and read the cadence `observe` share.
-5. **Dataset:** `lerobot-edit-dataset --repo_id <id> --operation.type info --operation.show_features true`.
-   Then open the visualiser and check `meta.stats` ranges against the expected units.
-6. **Training:** watch `dataloading_s` against `update_s` in the logs. High dataloading means
-   video decoding or workers; try `--num_workers` or `--dataset.image_transforms.backend=gpu`.
-   Overfit 1–2 episodes first as a pipeline sanity check.
-7. **Deployment:** compare `policy.config.input_features` with `robot.observation_features`. Run
-   `lerobot-replay` on a training episode: if replay fails, the policy will too. Read the rollout
-   status line (`infer` ms, `starved`).
 
 ## Experiment Checklist
 
@@ -520,13 +310,23 @@ Anti-patterns:
 - `robot-app-harness`: closed-loop development of scripted robot apps against a simulated SO-101
   (ARMATURE). It has no LeRobot hardware backend yet, so it does not drive a real arm
 
-## References (load on demand)
-- [references/cli-reference.md](references/cli-reference.md): flag tables for record, teleoperate,
-  replay, train, rollout, eval, edit-dataset and dataset-viz. Load it when building a non-trivial command.
-- [references/robots.md](references/robots.md): per-robot notes (SO-100 vs SO-101, bimanual, Koch,
-  OMX, LeKiwi, OpenArm, HopeJr, Reachy2, Unitree G1, YAM, reBot, EarthRover) and teleop devices.
-  Load it for any robot other than a single SO-101.
-- [references/dataset-format.md](references/dataset-format.md): v3 internals, Python API,
-  streaming, transforms, editing and merging recipes. Load it for dataset surgery or custom loaders.
-- [references/policies.md](references/policies.md): registered policy types, extras, VRAM and
-  policy-specific flags. Load it when choosing or fine-tuning a policy.
+## Reference Files (load on demand)
+- [so101-hardware.md](references/so101-hardware.md): when an SO-101 motor, calibration
+  or camera step misbehaves (gear ratios, calibration dirs, camera fields, USB bandwidth).
+- [troubleshooting.md](references/troubleshooting.md): when a symptom is not in the
+  short table, or to debug from the bus up (18 failure rows, anti-patterns, playbook).
+- [training.md](references/training.md): before resuming, fine-tuning SmolVLA,
+  training off-GPU or on HF Jobs.
+- [deployment.md](references/deployment.md): for recorded evaluation, other rollout
+  strategies, a custom Python control loop, or processor/normalisation questions.
+- [sim-and-rl.md](references/sim-and-rl.md): for `lerobot-eval` in simulation or HIL-SERL.
+- [cli-reference.md](references/cli-reference.md): when building a non-trivial command (flag
+  tables and defaults for the main CLIs).
+- [robots.md](references/robots.md): for any robot other than a single SO-101, and for
+  teleop devices.
+- [dataset-format.md](references/dataset-format.md): for loading from Python, editing,
+  merging, converting, streaming, transforms or custom loaders.
+- [policies.md](references/policies.md): when choosing a policy or its extras, VRAM and
+  policy-specific flags.
+- [overview.md](references/overview.md): for the pipeline diagram, full scope list or
+  draccus dotted-flag syntax.

@@ -6,7 +6,7 @@ your checkout, because `main` changes quickly. Units are SI (m, kg, s, rad, N, N
 
 ## Contents
 
-- CLI: `isaaclab` subcommands and flags
+- CLI: `isaaclab` subcommands and flags, plus training workflow notes
 - Simulation and physics backends
 - Scene and environment configs
 - Assets and actuators
@@ -66,6 +66,22 @@ Hydra tokens go last, with no dashes:
 
 Overrides apply after `__post_init__`, so derived values (sensor `update_period`,
 `render_interval`) must be overridden explicitly.
+
+### Training workflow notes
+
+Moved from SKILL.md (Training and Playing).
+
+- Outputs go to `logs/<library>/<experiment_name>/<timestamp>/`. RSL-RL `play` exports
+  `exported/policy.pt` (TorchScript) and `exported/policy.onnx` into the run directory.
+- TensorBoard: `uv run python -m tensorboard.main --logdir logs/rsl_rl`. For W&B:
+  `--logger wandb --log_project_name <proj>` with `--extra wandb`.
+- Custom scripts: build the cfg with `isaaclab_tasks.utils.parse_env_cfg(task, device=,
+  num_envs=, overrides=)`. Enter `with isaaclab.app.launch_simulation(env_cfg, args_cli):` and
+  create the env with `isaaclab.utils.instantiate(env_cfg)` or `gym.make(task, cfg=env_cfg)`.
+  Kit-dependent imports must happen after launch.
+- `num_envs`: start at 16-64 to debug, then scale until env-steps/s stops improving
+  (`benchmark runtime`). 4096 is typical for proprioceptive locomotion. Camera tasks fit far
+  fewer.
 
 ## Simulation and physics
 

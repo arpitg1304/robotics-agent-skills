@@ -1,17 +1,17 @@
 ---
 name: robot-reinforcement-learning
 description: >
-  Reinforcement learning for robots: deciding when RL beats imitation or classical control,
-  MDP design (observations, action spaces, control rate, terminated vs truncated), reward
-  design and reward hacking, PPO and SAC/TD3 selection, massively parallel sim training,
-  domain randomisation and sim-to-real, safe real-robot RL, and debugging training curves.
-  Use this skill when the user mentions reinforcement learning, RL, PPO, SAC, TD3, GAE,
-  reward function, reward shaping, curriculum, domain randomization, sim-to-real, actuator
-  network, asymmetric actor-critic, teacher-student distillation, rsl_rl, rl_games, skrl,
-  Stable-Baselines3, CleanRL, Brax training, FastTD3, HIL-SERL, SERL, RLPD, DrQ, residual RL,
-  DSRL, RL fine-tuning of a BC, diffusion or VLA policy, time-out bootstrapping, entropy
-  collapse, value loss explosion, NaN during training, or evaluating RL with seeds and IQM.
-  Also for locomotion and manipulation policies trained in Isaac Lab, mjlab or Playground.
+  Reinforcement learning for robots: when RL beats imitation or classical control, MDP
+  design (observations, action spaces, control rate, terminated vs truncated), reward design
+  and reward hacking, algorithm choice, massively parallel sim training, safe real-robot RL,
+  and debugging training curves. Use when the user mentions reinforcement learning, RL, PPO,
+  SAC, TD3, GAE, reward function, reward shaping, curriculum, domain randomization,
+  sim-to-real, actuator network, asymmetric actor-critic, teacher-student distillation,
+  rsl_rl, rl_games, skrl, Stable-Baselines3, CleanRL, Brax training, FastTD3, HIL-SERL,
+  SERL, RLPD, DrQ, residual RL, DSRL, RL fine-tuning of a BC, diffusion or VLA policy,
+  time-out bootstrapping, entropy collapse, value loss explosion, NaN during training, or
+  evaluating RL with seeds and IQM. Also for Isaac Lab, mjlab or Playground locomotion and
+  manipulation policies.
 ---
 
 # Robot Reinforcement Learning
@@ -41,9 +41,16 @@ Load these only when the task needs the detail:
 
 | File | Load when |
 |---|---|
+| [references/mdp-design.md](references/mdp-design.md) | Full observation-group and action-space tables |
+| [references/code-examples.md](references/code-examples.md) | Env skeleton, GAE, obs normaliser, IQM / CI code |
+| [references/reward-design.md](references/reward-design.md) | Isaac Lab reward template; suspected reward hacking |
+| [references/hybrid-methods.md](references/hybrid-methods.md) | RL with demos, a base controller, or a BC / diffusion / VLA policy |
+| [references/algorithm-mechanics.md](references/algorithm-mechanics.md) | PPO internals, off-policy methods, asymmetric critics, distillation |
 | [references/hyperparameters.md](references/hyperparameters.md) | Setting or tuning PPO / SAC / distillation hyperparameters; comparing to shipped Isaac Lab and SB3 values |
 | [references/library-comparison.md](references/library-comparison.md) | Choosing or switching RL libraries; interop bugs (obs groups, time-out flags, autoreset, normaliser export) |
 | [references/sim-to-real-randomization.md](references/sim-to-real-randomization.md) | Writing domain randomisation, latency buffers, system identification, or a pre-hardware reality-gap audit |
+| [references/real-world-rl.md](references/real-world-rl.md) | RL on hardware: safety layers, resets, success classifiers, interventions |
+| [references/debugging.md](references/debugging.md) | A training symptom is not in the short table in section 7 |
 
 ## 1. Mental Model
 
@@ -73,35 +80,16 @@ wrote" until proven otherwise.
 | BC policy works 60-80% and you need 95%+ on one setup | Hybrid: RL fine-tuning on real or sim data | Cheaper than many more demos when success is detectable |
 | Reward needs a human to judge every episode | Imitation, or learned reward with heavy validation | Real-world RL needs automatic reward |
 
-### Hybrid Approaches (fast-moving area; verify before committing)
-
-| Approach | Idea | Representative work |
-|---|---|---|
-| RL with demonstrations in the buffer | Off-policy RL sampling demos and online data together | RLPD (arXiv 2302.02948): 50/50 sampling, LayerNorm critics, critic ensembles |
-| Human-in-the-loop real-world RL | Demos + learned success classifier + human interventions + SAC | SERL (2401.16013), HIL-SERL (2410.21845); implemented in LeRobot |
-| Residual RL | RL learns a correction added to a fixed base controller or BC policy | Johannink et al. (1812.03201), Silver et al. (1812.06298), ResiP (2407.16677), Policy Decorator (2412.13630) |
-| Latent-noise steering | RL chooses the input noise of a frozen diffusion/flow policy | DSRL (2506.15799); black-box access to the base policy |
-| Direct fine-tuning of diffusion policies | Treat denoising steps as an MDP and run PPO | DPPO (2409.00588) |
-| RL for VLAs | Advantage-conditioned training on autonomous + intervention data; outcome-reward RL in sim | pi*0.6 / RECAP (2511.14759); SimpleVLA-RL (2509.09674, mostly simulation results); ConRFT (2502.05450) |
-| Teacher-student | RL teacher with privileged state, distilled into a deployable student | Lee et al. 2020 (2010.11251), RMA (2107.04034) |
-| Motion imitation reward | RL tracks reference motions (mocap, retargeted human data) | DeepMimic (1804.02717); humanoid whole-body tracking |
-
-Most headline numbers for VLA RL fine-tuning come from the authors' own papers. Treat them as
-evidence a method can work, not that it will work on your robot.
+Hybrid approaches (RLPD, residual RL, DSRL, RL for VLAs): [references/hybrid-methods.md](references/hybrid-methods.md).
 
 ## 2. MDP Design
 
 ### Observations
 
-| Group | Typical contents | Rules |
-|---|---|---|
-| Proprioception | Joint positions relative to default pose, joint velocities, base angular velocity, projected gravity, previous action | Express in body frame; include the previous action so the policy can reason about its own command |
-| Task / command | Goal pose relative to the robot, velocity command, object pose relative to gripper | Relative, not world-frame: world coordinates make the policy memorise positions |
-| Exteroception | Height scan, depth, camera images | Must exist on the real robot at the same rate and latency |
-| History | Last N proprio frames or a recurrent state | Needed when latency, contact state or dynamics parameters are unobserved |
-| Privileged (critic or teacher only) | Friction, masses, true base velocity, contact forces, terrain heights | Never in the deployed actor unless the robot estimates it |
+Groups (proprioception, task / command, exteroception, history, privileged for critic /
+teacher only), contents and rules: [references/mdp-design.md](references/mdp-design.md).
 
-- Scale every input to roughly unit range (hand-chosen scales or a running normaliser, below).
+- Scale every input to roughly unit range (hand-chosen scales or a running normaliser).
   Raw joint velocities of 20 rad/s next to quaternions of magnitude 1 slow learning.
 - Base linear velocity is easy in sim and hard on hardware. Isaac Lab's velocity task observes
   it (with +-0.1 noise); a deployed policy needs a state estimator that matches, or drop it.
@@ -111,13 +99,9 @@ evidence a method can work, not that it will work on your robot.
 
 ### Action Spaces
 
-| Action space | Use for | Pros | Cons |
-|---|---|---|---|
-| Joint position target `q_default + scale * a`, PD at higher rate | Default for legged and humanoid | Stable exploration, transfers well; Isaac Lab velocity task uses `scale=0.5` | Policy cannot command torque directly; PD gains become part of the MDP |
-| Joint position delta from current `q` | Arms, slow tasks | Small steps are safe | Drift; integral behaviour harder to learn |
-| Joint torque | High-rate, well-identified actuators | Full authority | Needs high control rate and accurate actuator model; transfers worst |
-| End-effector delta (pose twist) via IK / impedance / OSC | Real-robot manipulation RL | Safe workspace bounds, small action dim; HIL-SERL uses EE twists with an impedance controller | Controller quality limits the policy |
-| Discrete gripper open/close | Grasping | Avoids chattering half-closed grippers | HIL-SERL uses a separate DQN-style critic for it |
+Options (joint position target, the default for legged and humanoid; joint delta; torque;
+EE delta via IK / impedance / OSC; discrete gripper), pros and cons:
+[references/mdp-design.md](references/mdp-design.md).
 
 - **Action scale is a hyperparameter.** Too large: the initial std (often 1.0) slams joints to
   limits on step one. Too small: the policy cannot reach the needed poses and saturates.
@@ -152,132 +136,10 @@ Gymnasium 1.x vector envs default to `AutoresetMode.NEXT_STEP`: the step after a
 returns the reset observation, and that transition must be masked out. In `SAME_STEP` mode,
 bootstrap from `info["final_obs"]`, never from the returned (already reset) observation.
 
-### Example: Environment Skeleton
-
-Dependency-free so it runs anywhere (gymnasium is not required; the API matches
-`gymnasium.Env`: `reset() -> (obs, info)`, `step() -> (obs, reward, terminated, truncated, info)`).
-Subclass `gymnasium.Env` and add `observation_space` / `action_space` in real code.
-
-```python
-import math
-import random
-
-
-class JointReachEnv:
-    """1-DoF joint reaching task with a gymnasium-style API, standard library only."""
-
-    sim_dt = 0.005          # physics step [s]
-    decimation = 4          # physics steps per policy step -> 50 Hz policy
-    max_episode_steps = 250 # 5 s episode -> time limit is a TRUNCATION
-    action_scale = 1.6      # rad of target offset from default pose per unit action
-    q_default = 0.0
-    kp, kd, torque_limit = 20.0, 1.0, 5.0
-    q_limit = 2.5           # rad; leaving this is a failure TERMINATION
-    weights = {"track": 1.0, "action_rate": -0.01, "torque": -1e-4, "success": 0.5}
-
-    def __init__(self):
-        self.rng = random.Random()
-
-    def reset(self, seed=None):
-        if seed is not None:
-            self.rng.seed(seed)
-        self.q, self.qd = self.rng.uniform(-0.5, 0.5), 0.0
-        self.goal = self.rng.uniform(-1.5, 1.5)
-        self.inertia = 0.1 * self.rng.uniform(0.8, 1.2)   # domain randomisation
-        self.prev_action, self.t, self.ep_terms = 0.0, 0, {}
-        return self._obs(), {}
-
-    def _obs(self):
-        # Goal error, joint pos rel. to default, velocity, previous action (Markov for this task).
-        return [self.goal - self.q, self.q - self.q_default, self.qd, self.prev_action]
-
-    def step(self, action):
-        a = max(-1.0, min(1.0, float(action)))           # clip in the env, not only in the policy
-        q_target = self.q_default + self.action_scale * a  # absolute joint target around default pose
-        tau = 0.0
-        for _ in range(self.decimation):                 # PD runs at sim rate, policy at 50 Hz
-            tau = self.kp * (q_target - self.q) - self.kd * self.qd
-            tau = max(-self.torque_limit, min(self.torque_limit, tau))
-            self.qd += tau / self.inertia * self.sim_dt
-            self.q += self.qd * self.sim_dt
-        self.t += 1
-
-        err = self.goal - self.q
-        success = abs(err) < 0.02 and abs(self.qd) < 0.05
-        failed = abs(self.q) > self.q_limit
-        terms = {                                         # weighted, per-step, logged separately
-            "track": self.weights["track"] * math.exp(-err * err / 0.25),
-            "action_rate": self.weights["action_rate"] * (a - self.prev_action) ** 2,
-            "torque": self.weights["torque"] * tau * tau,
-            "success": self.weights["success"] * float(success),
-        }
-        reward = sum(terms.values())
-        for k, v in terms.items():
-            self.ep_terms[k] = self.ep_terms.get(k, 0.0) + v
-        self.prev_action = a
-
-        # Success is NOT terminal here: with positive per-step reward, ending on success
-        # would teach the policy to hover just outside the tolerance and keep collecting.
-        terminated = failed                              # true end of the MDP: do NOT bootstrap
-        truncated = (not terminated) and self.t >= self.max_episode_steps  # time limit: DO bootstrap
-        info = {"reward_terms": terms, "success": success, "failed": failed}
-        if terminated or truncated:
-            info["episode_reward_terms"] = dict(self.ep_terms)
-        return self._obs(), reward, terminated, truncated, info
-
-
-if __name__ == "__main__":
-    env = JointReachEnv()
-    obs, _ = env.reset(seed=0)
-    done = False
-    while not done:
-        # Scripted check: command the goal as the joint target (goal = err + q).
-        obs, r, terminated, truncated, info = env.step((obs[0] + obs[1]) / env.action_scale)
-        done = terminated or truncated
-    print(env.t, terminated, truncated, info["success"],
-          {k: round(v, 3) for k, v in info["episode_reward_terms"].items()})
-```
-
-Running it prints `250 False True True {...}`: a scripted controller reaches the goal, the
-episode ends by truncation, and each reward term is reported separately. **Always run a
+Runnable stdlib env skeleton, GAE with correct terminated / truncated handling and a running
+observation normaliser: [references/code-examples.md](references/code-examples.md). **Always run a
 scripted or random policy through a new env before training**; it catches sign errors,
 unreachable goals and broken resets in seconds instead of hours.
-
-### Example: GAE With Correct Terminated / Truncated Handling
-
-```python
-def compute_gae(rewards, values, next_values, terminated, truncated, gamma=0.99, lam=0.95):
-    """GAE over one environment's rollout of length T.
-
-    next_values[t] = V(s_{t+1}) for the TRUE next state: at an episode end, the final
-    observation (SAME_STEP autoreset: info["final_obs"]), never the next episode's reset obs.
-    terminated[t] -> no bootstrap.  truncated[t] -> bootstrap, but stop the recursion.
-    """
-    T = len(rewards)
-    adv, last = [0.0] * T, 0.0
-    for t in reversed(range(T)):
-        not_terminal = 1.0 - float(terminated[t])
-        episode_continues = 1.0 - float(terminated[t] or truncated[t])
-        delta = rewards[t] + gamma * not_terminal * next_values[t] - values[t]
-        last = delta + gamma * lam * episode_continues * last
-        adv[t] = last
-    returns = [a + v for a, v in zip(adv, values)]
-    return adv, returns
-
-
-if __name__ == "__main__":
-    # Reward 1 forever -> true V = 1/(1-gamma) = 100. A 3-step time limit cuts the episode.
-    V = 100.0
-    _, ok = compute_gae([1.0] * 3, [V] * 3, [V] * 3, [0, 0, 0], [0, 0, 1], gamma=0.99, lam=1.0)
-    _, bug = compute_gae([1.0] * 3, [V] * 3, [V] * 3, [0, 0, 1], [0, 0, 0], gamma=0.99, lam=1.0)
-    print("truncation bootstrapped  :", [round(x, 2) for x in ok])    # [100.0, 100.0, 100.0]
-    print("time-out treated terminal:", [round(x, 2) for x in bug])   # [2.97, 1.99, 1.0]
-```
-
-rsl_rl (v5.5.2 `ppo.py`) approximates the bootstrap by adding `gamma * V(s_t)` (the value of
-the current state, not of the final observation) to the reward on time-out steps. That is a
-reasonable approximation when consecutive states have similar value; the exact version needs
-the final observation.
 
 ### Resets
 
@@ -297,10 +159,6 @@ r_t = sum_i w_i * term_i(s_t, a_t, s_{t+1})
       task terms:  bounded tracking kernels, e.g. exp(-||err||^2 / sigma), success bonus
       regularisers: small penalties on action rate, torque, joint acceleration, power, limits
 ```
-
-The Isaac Lab velocity task is a good template: `track_lin_vel_xy_exp` (weight 1.0,
-std sqrt(0.25)), `track_ang_vel_z_exp` (0.5), and penalties such as `lin_vel_z_l2` (-2.0),
-`action_rate_l2` (-0.01), `dof_torques_l2` (-1e-5), `dof_acc_l2` (-2.5e-7).
 
 - **Dense vs sparse:** dense rewards learn fast but encode your solution (and your mistakes).
   Sparse success rewards are honest but need demos, curricula or very cheap samples. Real-world
@@ -323,17 +181,9 @@ std sqrt(0.25)), `track_ang_vel_z_exp` (0.5), and penalties such as `lin_vel_z_l
 | Mostly positive | Success ends episode | Avoid success; hover near the goal | Success bonus larger than the reward left in the episode, or make success non-terminal |
 | Any | Time-out treated as terminal | Time-dependent, myopic behaviour | Bootstrap truncation (section 2) |
 
-### Reward Hacking: Examples and Detection
+### Reward Hacking: Detection
 
-| Hack | Reward that invited it | Detection |
-|---|---|---|
-| Feet vibrating or tapping to farm a feet-air-time term | Air-time reward without contact-force or slip penalty | Video; foot contact frequency far above gait frequency |
-| High-frequency jitter that exploits contact solver penetration | Velocity tracking with weak action-rate penalty | Action spectrum; joint power; replay at lower sim dt |
-| Knocking the object off the table | "Object moved toward goal" without bounds | Object termination counts; final-state images |
-| Pushing the object with the arm instead of grasping | Object-pose reward only | Gripper-contact statistics |
-| Occluding the camera with the gripper | Image success classifier with no hard negatives | Classifier score vs independent check; review positives |
-| Standing still | Penalties dominate a weak task term | Task term near zero while penalties shrink |
-| Walking on knees, dragging a link | No undesired-contact penalty | Contact sensor on non-foot bodies (Isaac Lab `undesired_contacts`) |
+Hack examples and the Isaac Lab reward template: [references/reward-design.md](references/reward-design.md).
 
 Detection habits:
 
@@ -345,50 +195,15 @@ Detection habits:
 
 ## 4. Algorithm and Library Choice
 
-### PPO for Massively Parallel Sim
+- **Massively parallel sim:** on-policy PPO with thousands of GPU environments is the default
+  for locomotion and much of dexterous manipulation. Log the mean action std every iteration;
+  it is the best single health signal.
+- **Real robots and expensive sims:** off-policy (SAC / TD3; DrQ for pixels; RLPD when you have
+  demos; SERL / HIL-SERL for real-robot manipulation).
+- **Structural tricks:** asymmetric actor-critic, teacher-student distillation, RMA, symmetry
+  augmentation, history stacks.
 
-On-policy PPO with thousands of GPU environments is the default for locomotion and much of
-dexterous manipulation (Rudin et al., arXiv 2109.11978, trained ANYmal in minutes this way).
-Key mechanics and where they bite:
-
-- **GAE** (gamma, lambda) as above; time-out bootstrapping is essential because rollouts are
-  short (Isaac Lab ANYmal: 24 steps per env, 4096 envs).
-- **Advantage normalisation** per batch: keep on.
-- **Observation normalisation:** a running mean/std, frozen and exported with the policy.
-- **Entropy and action std:** rsl_rl's default Gaussian learns a state-independent std
-  (clamped to a range) starting at `init_std=1.0`
-  with `entropy_coef=0.005`. Log the mean std every iteration; it is the best single health
-  signal.
-- **KL control:** rsl_rl's adaptive schedule divides the learning rate by 1.5 when the KL
-  exceeds `2 * desired_kl` and multiplies it by 1.5 when below `desired_kl / 2`
-  (`desired_kl=0.01`, LR bounded to [1e-5, 1e-2]). SB3 uses `target_kl` for early stopping instead.
-- **Clipping:** `clip_param=0.2`, gradient norm clip 1.0. Rarely the first thing to tune.
-
-Full tables: [references/hyperparameters.md](references/hyperparameters.md).
-
-### Off-Policy for Real Robots and Expensive Sims
-
-| Method | Use when | Key ingredients |
-|---|---|---|
-| SAC / TD3 | Few environments, expensive samples | Replay buffer, target networks, auto-tuned entropy (SAC) |
-| DrQ / DrQ-v2 (2004.13649, 2107.09645) | Pixel observations | Random-shift image augmentation on critic and actor inputs |
-| RLPD (2302.02948) | You have demos or prior data | 50/50 demo/online batches, LayerNorm critics, 10-critic ensemble, UTD 20 in its example commands |
-| SERL / HIL-SERL | Real-robot manipulation | RLPD-style SAC, pretrained ResNet-10 encoder, binary success classifier, EE impedance control, human interventions |
-| FastTD3 (2505.22642) / FastSAC (2512.01996) | Massively parallel sim where wall-clock matters | Large batches, many envs, tuned off-policy; reported humanoid locomotion in ~15 min on one RTX 4090 (FastSAC paper) |
-
-### Structural Tricks
-
-- **Asymmetric actor-critic** (Pinto et al., arXiv 1710.06542): critic sees privileged state,
-  actor sees only deployable observations. Nearly free in sim; in rsl_rl v5 route an extra
-  observation group to the critic via `obs_groups`.
-- **Teacher-student distillation:** train a privileged teacher with RL, then train a student on
-  deployable inputs (proprio history, depth) with DAgger-style supervision (rsl_rl ships a
-  `Distillation` algorithm). Use when the actor needs information it can only infer over time.
-- **Adaptation modules (RMA):** student encodes history into an estimate of the teacher's
-  latent environment parameters.
-- **Symmetry augmentation:** mirror states/actions for bilateral robots (rsl_rl `symmetry_cfg`).
-- **Recurrent policies or history stacks:** needed under latency, partial observability or
-  randomised dynamics; start with a short stacked history before reaching for an LSTM.
+Mechanics and where they bite: [references/algorithm-mechanics.md](references/algorithm-mechanics.md).
 
 ### Library Choice (short version)
 
@@ -405,82 +220,19 @@ Full tables: [references/hyperparameters.md](references/hyperparameters.md).
 Simulator setup belongs in the `isaac-sim` and `mujoco` skills; details and interop gotchas
 are in [references/library-comparison.md](references/library-comparison.md).
 
-### Example: Running Observation Normaliser
-
-```python
-import math
-
-
-class RunningMeanStd:
-    """Per-dimension running mean/variance with a batched (Chan et al.) update."""
-
-    def __init__(self, dim, eps=1e-4, clip=5.0):
-        self.mean, self.var, self.count = [0.0] * dim, [1.0] * dim, eps
-        self.clip = clip
-
-    def update(self, batch):  # batch: list of observation vectors
-        n = len(batch)
-        if n == 0:
-            return
-        for i in range(len(self.mean)):
-            col = [x[i] for x in batch]
-            b_mean = sum(col) / n
-            b_var = sum((c - b_mean) ** 2 for c in col) / n
-            delta, tot = b_mean - self.mean[i], self.count + n
-            m2 = self.var[i] * self.count + b_var * n + delta * delta * self.count * n / tot
-            self.mean[i] += delta * n / tot
-            self.var[i] = m2 / tot
-        self.count += n
-
-    def normalize(self, x):
-        return [max(-self.clip, min(self.clip, (xi - m) / math.sqrt(v + 1e-8)))
-                for xi, m, v in zip(x, self.mean, self.var)]
-
-    def state_dict(self):  # ship this WITH the policy weights; deployment must use the same stats
-        return {"mean": list(self.mean), "var": list(self.var), "count": self.count}
-```
-
-Use NumPy or torch in real code. The failure this prevents is not numerical, it is
-operational: update statistics only during training, freeze them for evaluation, and export
-them with the checkpoint (or bake them into the ONNX graph). A policy deployed without its
-normaliser outputs confident garbage.
-
 ## 5. Sim-to-Real
 
 ### Domain Randomisation: What to Randomise
 
-Randomise what you cannot measure precisely, centred on what you can:
-
-- **Dynamics:** friction, link masses and payload, centre of mass, joint damping/friction/armature,
-  motor strength (torque scale), PD gains.
-- **Timing:** action latency and observation delay (often the largest unmodelled gap), control
-  jitter.
-- **Sensing:** observation noise and bias per channel, IMU drift, dropped frames; camera pose,
-  lighting and textures for pixel policies.
-- **Disturbances:** pushes, terrain, initial states, object properties.
+Randomise what you cannot measure precisely, centred on what you can: dynamics, timing
+(action latency and observation delay, often the largest unmodelled gap), sensing and
+disturbances. Identify first, randomise second. A low-pass or exponential filter on actions
+must be **in the training loop** if it is on the robot.
 
 Too-wide randomisation produces timid, slow policies; too-narrow produces policies that fail on
-contact with hardware. Widen until training slows, then stop (heuristic). Shipped legged ranges
-and a latency buffer: [references/sim-to-real-randomization.md](references/sim-to-real-randomization.md).
-
-### System Identification and Actuator Models
-
-1. Identify first, randomise second: fit damping, friction, armature, latency from logged real
-   trajectories under the same PD gains and rate (MuJoCo's `mujoco.sysid`; see `mujoco`).
-2. When the actuator cannot be modelled analytically (series-elastic, backlash, hydraulics),
-   learn an actuator network from (position-error history, velocity history) -> torque and use
-   it in sim (Hwangbo et al., arXiv 1901.08652).
-3. Dynamics randomisation for manipulation: Peng et al., arXiv 1710.06537. Visual randomisation:
-   Tobin et al., arXiv 1703.06907.
-
-### Smoothness and Action Filtering
-
-- Penalise action rate and joint acceleration in the reward; consider explicit smoothness
-  regularisation of the policy (CAPS, arXiv 2012.06644).
-- A low-pass or exponential filter on actions must be **in the training loop** if it is on the
-  robot; adding it only at deployment changes the dynamics the policy learned.
-- Check the action spectrum in sim: energy near the Nyquist rate of the control loop will
-  excite unmodelled resonances on hardware.
+contact with hardware. Widen until training slows, then stop (heuristic). Full list, legged
+ranges, latency buffer, system ID, actuator networks, filtering:
+[references/sim-to-real-randomization.md](references/sim-to-real-randomization.md).
 
 ### Reality-Gap Checklist (short form; full audit in the reference file)
 
@@ -501,43 +253,9 @@ policy; HIL-SERL reached near-perfect success in 1-2.5 hours per task. Both used
 demonstrations, pretrained vision encoders, careful workspace engineering and human
 supervision; plan in hours of robot time, and move to sim if a task needs millions of steps.
 
-### Safety Layers (outside the policy, fail closed)
-
-| Layer | Implementation |
-|---|---|
-| Workspace bounds | Clip EE targets to a box (LeRobot `end_effector_bounds`; HIL-SERL bounds) |
-| Step limits | Max EE translation/rotation per step (LeRobot `end_effector_step_sizes`) |
-| Compliance | Impedance/admittance control with bounded stiffness; force/torque thresholds that abort |
-| Joint and torque limits | Enforced in the driver, below the policy |
-| Watchdog | Hold position if no action arrives within one control period plus margin |
-| Human override | Intervention device always active; E-stop reachable |
-
-### Resets
-
-- **Scripted resets:** return to a fixed or randomised joint configuration (LeRobot
-  `fixed_reset_joint_positions`, `reset_time_s`).
-- **Human resets:** acceptable for hours-long runs; budget the human time.
-- **Learned reset policy / forward-backward training:** a second policy undoes the task.
-- **Reset-free:** design the task to be cyclic (pick, place, pick again).
-- Randomise the reset pose slightly so the policy does not overfit one start.
-
-### Reward From Classifiers
-
-- Train a binary success classifier on images: HIL-SERL reports typically ~200 positive and
-  ~1000 negative frames, with >95% accuracy on held-out data. LeRobot trains one with
-  `lerobot-train` and applies it with `success_threshold`.
-- The policy will search for false positives. Add frames from policy rollouts as hard
-  negatives, and periodically audit classifier positives by eye.
-- Zero-shot VLM reward models exist (LeRobot integrates TOPReward). Treat them as shaping or
-  progress signals and validate against human labels before letting the policy optimise them.
-
-### Human Interventions
-
-- HIL-SERL stores intervention transitions in both the demonstration and RL buffers.
-- A healthy run shows intervention rate falling over training (LeRobot's guide plots it);
-  flat or rising intervention rate means the reward, action space or observation is wrong.
-- Intervene to correct and to prevent damage, not to complete every episode; constant takeover
-  turns RL into slow imitation.
+Safety layers live **outside the policy and fail closed**: workspace bounds, step limits,
+compliance, joint and torque limits, watchdog, human override. Table, resets, classifier
+rewards: [references/real-world-rl.md](references/real-world-rl.md).
 
 ## 7. Debugging: Symptom -> Cause -> Fix
 
@@ -547,17 +265,12 @@ supervision; plan in hours of robot time, and move to sim if a task needs millio
 | Learns to stand still or fall immediately | Penalties dominate task term; negative per-step reward with failure termination | Rebalance weights; positive per-step reward or termination penalty |
 | Value loss explodes or grows steadily | Unnormalised rewards/returns, time-outs treated as terminal, reward spikes | Bootstrap truncation; scale rewards to O(1) per step; clip outlier terms; lower LR |
 | Policy std / entropy collapses early, then plateau | Entropy coefficient too low, LR too high, action scale too small | Raise `entropy_coef`; check KL; enlarge action scale |
-| Policy std grows without bound | Entropy bonus too large or reward insensitive to action | Lower entropy coef; check that actions reach the actuators |
-| KL spikes, adaptive LR pinned at its floor (1e-5) | Batch too small, too many epochs, non-stationary normaliser | Fewer epochs, more mini-batch data; freeze or slow normaliser updates |
 | NaN in loss or actions | Division by zero in obs (normalised quaternion of zeros), sim blow-up, log-prob of saturated tanh, LR too high | `torch.autograd.set_detect_anomaly` briefly; assert finite obs/rewards in env; reset envs whose state is non-finite; clamp log-std |
-| Actions pinned at bounds | Action scale too small, reward favours max effort, unbounded Gaussian clipped by env | Log clipped-action fraction; rescale; add effort penalty; consider tanh-squashed or Beta policy |
 | Great in training, bad in eval | Eval uses stochastic actions or different DR; normaliser not loaded; overfit to seeds | Evaluate deterministic mean action on fixed seeds with frozen normaliser |
-| Jittery gait, high-frequency actions | Weak action-rate penalty, policy rate too high, exploiting solver | Action-rate / acceleration penalty, CAPS, lower rate, filter in the loop |
 | Works in sim, oscillates on robot | Latency, PD gain mismatch, filter missing in training | Measure latency and randomise it; match gains; include filter in sim |
-| Works in sim, too weak on robot | Motor strength or friction optimistic in sim | SysID; randomise motor strength and joint friction |
 | Huge seed-to-seed variance | Hard exploration, brittle reward | Curriculum, shaping, more envs; report IQM with CIs (section 8) |
-| Off-policy Q-values diverge | High UTD without regularisation, bad terminal flags | LayerNorm critics, ensembles (RLPD), check `done` vs time-out handling |
-| Real-world RL never improves | Classifier false positives, unsafe bounds too tight to solve task, too few demos | Audit classifier; widen bounds carefully; add demos; check intervention data is in the buffers |
+
+Full table: [references/debugging.md](references/debugging.md).
 
 **First 30 minutes on a new environment (heuristic):** random policy and scripted policy
 rollouts with per-term reward logging; check observation ranges and that `terminated` and
@@ -577,59 +290,22 @@ anything.
 - **Real robot:** fixed trial count per condition (20+ when possible), interleave conditions
   to avoid drift bias, report binomial confidence intervals.
 
-```python
-import math
-import random
-
-
-def iqm(scores):
-    """Interquartile mean: mean of the middle 50% (rliable's recommended aggregate)."""
-    s = sorted(scores)
-    lo = int(0.25 * len(s))  # same cut as scipy.stats.trim_mean(scores, 0.25)
-    mid = s[lo:len(s) - lo]
-    return sum(mid) / len(mid)
-
-
-def bootstrap_ci(scores, stat=iqm, reps=2000, alpha=0.05, seed=0):
-    """Percentile bootstrap CI over seeds. Use rliable for stratified multi-task versions."""
-    rng = random.Random(seed)
-    boots = sorted(stat([rng.choice(scores) for _ in scores]) for _ in range(reps))
-    return boots[int(alpha / 2 * reps)], boots[int((1 - alpha / 2) * reps) - 1]
-
-
-def wilson_ci(successes, trials, z=1.96):
-    """95% Wilson interval for a real-robot success rate (better than +-1.96*sqrt(p(1-p)/n))."""
-    p = successes / trials
-    denom = 1 + z * z / trials
-    centre = (p + z * z / (2 * trials)) / denom
-    half = z * math.sqrt(p * (1 - p) / trials + z * z / (4 * trials * trials)) / denom
-    return centre - half, centre + half
-
-
-if __name__ == "__main__":
-    per_seed = [0.92, 0.88, 0.95, 0.31, 0.90, 0.93, 0.89, 0.94, 0.12, 0.91]
-    print("mean", round(sum(per_seed) / len(per_seed), 3), "IQM", round(iqm(per_seed), 3),
-          "95% CI", tuple(round(c, 3) for c in bootstrap_ci(per_seed)))
-    print("18/20 real trials:", tuple(round(c, 3) for c in wilson_ci(18, 20)))
-```
-
-Two failed seeds pull the mean to 0.775 while the IQM is 0.905; report both, and investigate
-the failures rather than dropping them.
+IQM, bootstrap CI and Wilson interval code:
+[references/code-examples.md](references/code-examples.md). Investigate failed seeds rather
+than dropping them.
 
 ## 9. Anti-Patterns
 
-- **Tuning hyperparameters before verifying the env.** Most "PPO does not learn" reports are
-  env bugs. Scripted policy first.
-- **One seed, one curve.** RL variance between seeds routinely exceeds the effect being claimed
-  (Henderson et al., arXiv 1709.06560).
-- **Summed reward only in the logs.** You cannot see hacking or dominance without per-term logs.
-- **Privileged observations leaking into the actor.** Works in sim, impossible on hardware.
-- **Randomising around guessed nominal values.** Identify first.
-- **Deployment code rewritten from scratch.** Share observation building, action scaling and
-  normalisation code between sim and robot, and test it with recorded pairs.
-- **RL on hardware without an external safety layer.** The policy will explore the action that
-  breaks the gripper.
-- **Real-world RL for a task that needs millions of samples.** Move it to sim or use demos.
+- **Tuning hyperparameters before verifying the env.**
+- **One seed, one curve.**
+- **Summed reward only in the logs.**
+- **Privileged observations leaking into the actor.**
+- **Randomising around guessed nominal values.**
+- **Deployment code rewritten from scratch.**
+- **RL on hardware without an external safety layer.**
+- **Real-world RL for a task that needs millions of samples.**
+
+Full text: [references/debugging.md](references/debugging.md).
 
 ## 10. Checklist
 

@@ -8,6 +8,17 @@ Both snippets were run with Python 3.14 (numpy for the ensembler, stdlib for the
 runner). They are sketches of the timing logic, not a robot driver: plug in your own
 `get_obs`, `send_action` and safety layer.
 
+## Execution modes at a glance
+
+- *Synchronous:* infer, execute `n` actions of the chunk, repeat. Simplest; pauses
+  during inference unless inference is fast relative to `n` steps.
+- *Temporal ensembling (ACT):* infer every step, average overlapping predictions.
+  Smooth, but one inference per step and less reactive. Do not average across modes.
+- *Asynchronous:* infer the next chunk while executing the current one, drop the
+  actions that went stale during inference. Needed for large VLAs at high rates.
+  SmolVLA ships async inference; real-time chunking (arXiv 2506.07339) makes
+  flow/diffusion chunks join smoothly.
+
 ## 1. Measure the latency budget first
 
 Write down, in milliseconds, for your actual hardware:

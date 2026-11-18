@@ -82,3 +82,38 @@ inside the decimation loop, not at policy rate.
 | State estimator | Policy trained on noise/bias like the real estimator (or on estimator outputs in sim) |
 | Replay test | Feed logged real observations to the policy offline; compare action statistics with sim |
 | Safety | E-stop, joint limits, torque limits, and a watchdog that holds position if the policy stalls |
+
+## Moved From SKILL.md
+
+The subsections below were moved verbatim from SKILL.md section 5.
+
+### Domain Randomisation: What to Randomise
+
+Randomise what you cannot measure precisely, centred on what you can:
+
+- **Dynamics:** friction, link masses and payload, centre of mass, joint damping/friction/armature,
+  motor strength (torque scale), PD gains.
+- **Timing:** action latency and observation delay (often the largest unmodelled gap), control
+  jitter.
+- **Sensing:** observation noise and bias per channel, IMU drift, dropped frames; camera pose,
+  lighting and textures for pixel policies.
+- **Disturbances:** pushes, terrain, initial states, object properties.
+
+### System Identification and Actuator Models
+
+1. Identify first, randomise second: fit damping, friction, armature, latency from logged real
+   trajectories under the same PD gains and rate (MuJoCo's `mujoco.sysid`; see `mujoco`).
+2. When the actuator cannot be modelled analytically (series-elastic, backlash, hydraulics),
+   learn an actuator network from (position-error history, velocity history) -> torque and use
+   it in sim (Hwangbo et al., arXiv 1901.08652).
+3. Dynamics randomisation for manipulation: Peng et al., arXiv 1710.06537. Visual randomisation:
+   Tobin et al., arXiv 1703.06907.
+
+### Smoothness and Action Filtering
+
+- Penalise action rate and joint acceleration in the reward; consider explicit smoothness
+  regularisation of the policy (CAPS, arXiv 2012.06644).
+- A low-pass or exponential filter on actions must be **in the training loop** if it is on the
+  robot; adding it only at deployment changes the dynamics the policy learned.
+- Check the action spectrum in sim: energy near the Nyquist rate of the control loop will
+  excite unmodelled resonances on hardware.

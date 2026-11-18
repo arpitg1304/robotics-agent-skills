@@ -1,11 +1,13 @@
 # 🤖 Robotics Agent Skills
 
-Production-grade robotics knowledge for AI coding agents.
+Production-grade robotics knowledge for AI coding agents, and a harness that lets an
+agent build robot software and prove it works.
 
-Drop these `SKILL.md` files into Claude Code, Autohand Code, Cursor, Copilot-style
+Drop the `SKILL.md` files into Claude Code, Autohand Code, Cursor, Copilot-style
 agents, or custom agent frameworks to make them generate better ROS1/ROS2 software:
 safer nodes, correct QoS, lifecycle patterns, tests, launch files, Docker, bringup,
-perception, and security.
+perception, and security. Then use the harness to have the agent write robot
+application code, run it in simulation, and iterate until it passes held-out trials.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 ![Skills](https://img.shields.io/badge/skills-11-green)
@@ -18,7 +20,77 @@ perception, and security.
 - **Harness** (`harness/`): a closed loop in which an agent writes robot application code
   against a rig, runs it in a simulator and iterates on an evaluator report. Experimental.
 
-## Why This Exists
+## Agent Harness (Experimental)
+
+Knowledge makes an agent write better robot code. It does not tell the agent whether the
+code works. The harness closes that loop: pick a **rig** (a robot plus its sensors and
+actuators) and a **task**, and the agent probes the devices, writes drivers and task code,
+runs them in simulation, reads what failed, and iterates until the code passes seeds it has
+not tuned against.
+
+```text
+probe the rig ──> write app.py ──> rah run (dev seeds) ──> read report ──┐
+                        ^                                                 │
+                        └───────────────── fix one thing ─────────────────┘
+                                                   └──> rah verify (held-out seeds)
+```
+
+What the first version gives you:
+
+- **A device bus, not a simulator API.** The app sees an arm with controller IK, a gripper
+  with contact sensing, and an object tracker that reports in its own mounted frame, below
+  the control rate, with noise. Integrating the sensors is part of the job.
+- **An evaluator the app cannot see.** Success is a set of goal relations such as
+  `at(object_0,target_2)` or `on(object_2,object_1)`. Reports give per-part stage progress,
+  a timeline of which relation broke during which phase, a check of the app's beliefs
+  against ground truth, and safety-envelope violations.
+- **Honest iteration.** Dev and held-out seeds, plus an experiment ledger that ties every
+  result to a hash of the code that produced it.
+- **Replay.** `rah replay` re-simulates any episode in the ARMATURE studio next to its event
+  timeline.
+- **An agent procedure.** The [robot-app-harness](skills/robot-app-harness/SKILL.md) skill
+  teaches an agent the loop.
+
+### Try it
+
+Requires Python 3.10+ and Node.js 22+. The first backend is the
+[ARMATURE](https://github.com/arpitg1304/armature) simulator, loaded at run time from your
+own checkout.
+
+```bash
+git clone https://github.com/arpitg1304/armature.git
+(cd armature && npm ci && npm run build)     # the build is only needed for replay
+export ARMATURE_HOME=$PWD/armature
+
+cd robotics-agent-skills/harness
+bin/rah doctor
+bin/rah probe  --rig rigs/armature-panda-bench.json
+bin/rah run    --rig rigs/armature-panda-bench.json --task tasks/stack-blocks.json --app examples/pick_place/app.py
+bin/rah verify --rig rigs/armature-panda-bench.json --task tasks/stack-blocks.json --app examples/pick_place/app.py
+bin/rah replay runs/<run-directory>
+```
+
+To have an agent write the app, start a workspace with `bin/rah init my_app --rig ... --task ...`
+and ask your agent to solve it using the `robot-app-harness` skill.
+
+### First results
+
+A reference pick-and-place app, written through the loop, on held-out seeds:
+
+| Task | Franka Panda | SO-101 |
+| --- | --- | --- |
+| Move three blocks to their targets | 10/10 | 10/10 |
+| Same, in reverse order | 9/10 | 4/10 |
+| Stack three blocks | 10/10 | 0/10 |
+
+The SO-101 failures are open problems, described in the app's
+[LESSONS.md](harness/examples/pick_place/LESSONS.md). ARMATURE moves the arm with kinematic
+servos and approximate collision, so these numbers show that the logic and sensor
+integration are sound, not that the code transfers to hardware.
+
+Design, backend protocol and what is not built yet: [harness/README.md](harness/README.md).
+
+## Why the Skills Exist
 
 General-purpose coding agents know ROS syntax, but they often miss the robotics details
 that matter in production: QoS compatibility, deterministic startup, bounded callbacks,
@@ -48,27 +120,7 @@ defects in both artifacts are documented in the report.
 
 Full report: [evals/EVAL_REPORT.md](evals/EVAL_REPORT.md)
 
-## Agent Harness (Experimental)
-
-Knowledge makes an agent write better robot code. It does not tell the agent whether the
-code works. The harness adds that: pick a robot and its peripherals, describe a task, and
-the agent probes the devices, writes drivers and task code, runs it in simulation, and
-iterates until it passes seeds it has not tuned against.
-
-```bash
-export ARMATURE_HOME=/path/to/armature        # https://github.com/arpitg1304/armature, after `npm ci`
-cd harness
-bin/rah probe  --rig rigs/armature-panda-bench.json
-bin/rah run    --rig rigs/armature-panda-bench.json --task tasks/stack-blocks.json --app examples/pick_place/app.py
-bin/rah verify --rig rigs/armature-panda-bench.json --task tasks/stack-blocks.json --app examples/pick_place/app.py
-```
-
-The first backend is the [ARMATURE](https://github.com/arpitg1304/armature) simulator, run
-headlessly. Its arm motion is kinematic, so passing there shows that the logic and the
-sensor integration are sound, not that the code transfers to hardware. Design, protocol,
-measured results and what is not built yet: [harness/README.md](harness/README.md).
-
-## Quick Start
+## Skills Quick Start
 
 Install selected skills into a project:
 
@@ -187,6 +239,8 @@ Robot System Architecture
 ```
 
 ## Roadmap
+
+For the harness roadmap, see [harness/README.md](harness/README.md#not-built-yet).
 
 High-impact skills to add next:
 

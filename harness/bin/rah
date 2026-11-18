@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""Zero-install entry point: runs the harness CLI from this checkout."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from rah.cli import main  # noqa: E402
+
+sys.exit(main())

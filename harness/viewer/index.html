@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>rah replay</title>
+    <style>
+      :root {
+        --bg: #f4f5f7;
+        --panel: #ffffff;
+        --line: #d9dde3;
+        --text: #1b2430;
+        --muted: #5d6b7c;
+        --accent: #2f6fde;
+        --good: #1c7c4a;
+        --bad: #b3372b;
+        --warn: #9a6a00;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #12161c;
+          --panel: #1b212a;
+          --line: #2e3744;
+          --text: #e6ebf2;
+          --muted: #98a5b6;
+          --accent: #6ea2ff;
+          --good: #58c98c;
+          --bad: #f0796c;
+          --warn: #e0b04a;
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      header, footer {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 14px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      footer { border-bottom: 0; border-top: 1px solid var(--line); }
+      h1 { font-size: 14px; margin: 0; font-weight: 600; }
+      .muted { color: var(--muted); }
+      .badge {
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid currentColor;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .good { color: var(--good); }
+      .bad { color: var(--bad); }
+      .warn { color: var(--warn); }
+      .spacer { flex: 1; }
+      main { display: grid; grid-template-columns: 1fr auto; min-height: 0; }
+      iframe { width: 100%; height: 100%; border: 0; background: #000; }
+      aside {
+        width: 320px;
+        overflow-y: auto;
+        background: var(--panel);
+        border-left: 1px solid var(--line);
+        padding: 10px 12px;
+      }
+      aside[hidden] { display: none; }
+      aside h2 {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 14px 0 6px;
+      }
+      aside h2:first-child { margin-top: 0; }
+      ul { list-style: none; margin: 0; padding: 0; }
+      li.event button {
+        display: grid;
+        grid-template-columns: 48px 1fr;
+        gap: 8px;
+        width: 100%;
+        text-align: left;
+        padding: 5px 6px;
+        border: 0;
+        border-radius: 6px;
+        background: none;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+      li.event button:hover { background: var(--bg); }
+      li.event.future { opacity: 0.45; }
+      li.event .step { color: var(--muted); font-variant-numeric: tabular-nums; }
+      li.event small { display: block; color: var(--muted); }
+      code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+      button.control, select {
+        padding: 5px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+      button.control:disabled { opacity: 0.5; cursor: default; }
+      input[type="range"] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+      #counter { font-variant-numeric: tabular-nums; min-width: 150px; }
+      #phase { font-weight: 600; }
+      @media (max-width: 800px) {
+        main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+        aside { width: auto; max-height: 35vh; border-left: 0; border-top: 1px solid var(--line); }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 id="title">Loading replay…</h1>
+      <span id="outcome" class="badge" hidden></span>
+      <span class="muted">Phase: <span id="phase">–</span></span>
+      <span class="spacer"></span>
+      <span id="status" class="muted" role="status">Starting the studio…</span>
+      <button id="toggleTimeline" class="control" aria-expanded="true" aria-controls="timeline">Timeline</button>
+    </header>
+    <main>
+      <iframe id="studio" src="studio.html" title="ARMATURE studio"></iframe>
+      <aside id="timeline">
+        <h2>Task</h2>
+        <p id="instruction"></p>
+        <h2>Goal at end of run</h2>
+        <ul id="goal"></ul>
+        <h2>Events (click to jump)</h2>
+        <ul id="events"></ul>
+      </aside>
+    </main>
+    <footer>
+      <button id="play" class="control" disabled>Play</button>
+      <button id="restart" class="control" disabled>Restart</button>
+      <label class="muted">Speed
+        <select id="speed">
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+          <option value="4">4×</option>
+        </select>
+      </label>
+      <input id="scrub" type="range" min="0" max="0" value="0" step="1" aria-label="Step" disabled />
+      <span id="counter">step 0 / 0</span>
+    </footer>
+
+    <script type="module">
+      const $ = (id) => document.getElementById(id);
+      const replay = await (await fetch("replay.json")).json();
+      const { actions, marks, checkpoints, report } = replay;
+      const hz = replay.control_hz;
+      const truth = new Map(checkpoints);
+      const events = report.events.filter((e) => e.relation || e.safety_violation);
+
+      // --- static content ---
+      document.title = `rah replay · ${replay.task} · seed ${replay.seed}`;
+      $("title").textContent = `${replay.rig} · ${replay.task} · seed ${replay.seed}`;
+      $("instruction").textContent = replay.instruction;
+      const badge = $("outcome");
+      badge.textContent = report.outcome.replaceAll("_", " ");
+      badge.classList.add(report.success ? "good" : "bad");
+      badge.hidden = false;
+      for (const item of report.goal) {
+        const li = document.createElement("li");
+        li.innerHTML = `<span class="${item.holds ? "good" : "bad"}">${item.holds ? "✓" : "✗"}</span> <code></code>`;
+        li.querySelector("code").textContent = item.relation;
+        $("goal").append(li);
+      }
+      if (!report.goal.length) $("goal").innerHTML = '<li class="muted">No relational goal for this task.</li>';
+      const eventItems = events.map((event) => {
+        const li = document.createElement("li");
+        li.className = "event future";
+        const button = document.createElement("button");
+        const what = event.relation
+          ? `${event.relation} ${event.holds ? "became true" : "became false"}`
+          : event.safety_violation;
+        button.innerHTML = `<span class="step"></span><span><code></code><small></small></span>`;
+        button.querySelector(".step").textContent = event.step;
+        button.querySelector("code").textContent = what;
+        button.querySelector("small").textContent = `during ${event.mark}`;
+        // Land a second before the event so the cause is visible.
+        button.onclick = () => seek(Math.max(0, event.step - hz));
+        li.append(button);
+        $("events").append(li);
+        return li;
+      });
+      if (!events.length) $("events").innerHTML = '<li class="muted">No relation changes recorded.</li>';
+      $("toggleTimeline").onclick = () => {
+        const panel = $("timeline");
+        panel.hidden = !panel.hidden;
+        $("toggleTimeline").setAttribute("aria-expanded", String(!panel.hidden));
+      };
+
+      // --- studio ---
+      const frame = $("studio");
+      const sim = await new Promise((resolve) => {
+        const poll = setInterval(() => {
+          const api = frame.contentWindow?.armature;
+          if (api?.reset && api?.step) (clearInterval(poll), resolve(api));
+        }, 200);
+      });
+
+      let step = 0;
+      let ended = false; // the studio's own episode ended before the recorded actions ran out
+      let playing = false;
+      let maxDrift = 0;
+      let note = "";
+
+      function reset() {
+        sim.reset({ ...replay.config, robotId: replay.robot });
+        step = 0;
+        ended = false;
+        maxDrift = 0;
+        note = "";
+      }
+
+      function advance() {
+        if (step >= actions.length || ended) return false;
+        try {
+          const result = sim.step(actions[step]);
+          step += 1;
+          if ((result.terminated || result.truncated) && step < actions.length) {
+            ended = true;
+            note = "The studio ended the episode here by its built-in rule; the recorded run continued under the task's own goal.";
+          }
+        } catch (error) {
+          ended = true;
+          note = error.message;
+          return false;
+        }
+        const expected = truth.get(step);
+        if (expected) {
+          const actual = sim.observe().objectPositions;
+          expected.forEach((p, i) => {
+            maxDrift = Math.max(maxDrift, Math.hypot(...p.map((v, k) => v - actual[i * 3 + k])));
+          });
+        }
+        return true;
+      }
+
+      function seek(target) {
+        if (target < step) reset();
+        while (step < target && advance());
+        refresh();
+      }
+
+      function refresh() {
+        $("scrub").value = step;
+        $("counter").textContent = `step ${step} / ${actions.length} · ${(step / hz).toFixed(1)} s`;
+        let phase = marks[0][1];
+        for (const [at, label] of marks) if (at <= step) phase = label;
+        $("phase").textContent = phase;
+        events.forEach((event, i) => eventItems[i].classList.toggle("future", event.step > step));
+        const finished = step >= actions.length || ended;
+        $("play").textContent = playing ? "Pause" : finished ? "Replay" : "Play";
+        const status = $("status");
+        status.className = maxDrift > 0.001 ? "warn" : "muted";
+        status.textContent =
+          note ||
+          (maxDrift > 0.001
+            ? `Replay differs from the recorded run by up to ${(maxDrift * 1000).toFixed(1)} mm`
+            : "Replay matches the recorded run");
+      }
+
+      let last = 0;
+      let owed = 0;
+      function tick(now) {
+        if (!playing) return;
+        owed += ((now - last) / 1000) * hz * Number($("speed").value);
+        last = now;
+        // Cap catch-up so a background tab does not fast-forward on return.
+        owed = Math.min(owed, hz);
+        while (owed >= 1) {
+          owed -= 1;
+          if (!advance()) {
+            playing = false;
+            break;
+          }
+        }
+        refresh();
+        if (playing) requestAnimationFrame(tick);
+      }
+
+      function play() {
+        if (step >= actions.length || ended) reset();
+        playing = true;
+        last = performance.now();
+        owed = 0;
+        requestAnimationFrame(tick);
+        refresh();
+      }
+
+      $("play").onclick = () => {
+        if (playing) {
+          playing = false;
+          refresh();
+        } else play();
+      };
+      $("restart").onclick = () => {
+        playing = false;
+        reset();
+        refresh();
+      };
+      $("scrub").max = actions.length;
+      $("scrub").oninput = (event) => {
+        playing = false;
+        seek(Number(event.target.value));
+      };
+      for (const id of ["play", "restart", "scrub"]) $(id).disabled = false;
+
+      // Exposed for automated checks.
+      window.rahReplay = { seek, state: () => ({ step, ended, maxDrift, note, total: actions.length }) };
+
+      reset();
+      refresh();
+      play();
+    </script>
+  </body>
+</html>

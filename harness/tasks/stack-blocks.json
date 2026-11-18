@@ -1,0 +1,32 @@
+{
+  "name": "stack-blocks",
+  "instruction": "Three blocks start in a row at randomized positions. Stack them into a single tower at the target location, in target order from the bottom up, then retract the arm.",
+  "scene": {
+    "task": "stack",
+    "object": "blocks",
+    "objectCount": 3,
+    "randomize": true,
+    "maxSteps": 1800
+  },
+  "seeds": {
+    "dev": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "held_out": [
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109,
+      110
+    ]
+  }
+}

@@ -58,6 +58,31 @@ jobs:
           done
           test ! -e "${RUNNER_TEMP}/bad/evals"
 
+  harness:
+    name: Agent harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # The simulator is loaded at run time from its own checkout; none of it is vendored here.
+      - name: Fetch ARMATURE
+        run: |
+          git clone --depth 1 https://github.com/arpitg1304/armature.git "${RUNNER_TEMP}/armature"
+          npm ci --prefix "${RUNNER_TEMP}/armature"
+      - name: Harness tests
+        working-directory: harness
+        env:
+          ARMATURE_HOME: ${{ runner.temp }}/armature
+        run: |
+          python3 bin/rah doctor
+          python3 -m unittest discover -s tests -v
+          node --check backends/armature/bridge.mjs
+
   evals:
     name: Eval packages
     runs-on: ubuntu-latest

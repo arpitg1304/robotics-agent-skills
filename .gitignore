@@ -31,6 +31,12 @@ install/
 log/
 build/
 
+# Harness run outputs
+runs/
+
+# Local working plans
+/plans/
+
 # Jupyter
 .ipynb_checkpoints/
 

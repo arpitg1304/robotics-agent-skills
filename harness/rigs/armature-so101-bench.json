@@ -1,0 +1,43 @@
+{
+  "name": "armature-so101-bench",
+  "description": "SO-101 arm on the compact bench with an overhead object tracker.",
+  "backend": {
+    "type": "armature"
+  },
+  "robot": "so101",
+  "peripherals": {
+    "tracker": {
+      "type": "object_tracker",
+      "rate_hz": 10,
+      "noise_m": 0.0005,
+      "mount": {
+        "xyz": [
+          0.05,
+          0.6,
+          0.0
+        ],
+        "rpy": [
+          -1.5707963267948966,
+          0.0,
+          0.0
+        ]
+      }
+    }
+  },
+  "safety": {
+    "workspace": {
+      "frame": "world",
+      "applies_to": "tcp",
+      "min": [
+        -0.3,
+        0.0,
+        -0.3
+      ],
+      "max": [
+        0.3,
+        0.4,
+        0.3
+      ]
+    }
+  }
+}

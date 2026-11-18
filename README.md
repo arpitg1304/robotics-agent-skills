@@ -10,7 +10,7 @@ perception, and security. Then use the harness to have the agent write robot
 application code, run it in simulation, and iterate until it passes held-out trials.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-![Skills](https://img.shields.io/badge/skills-11-green)
+![Skills](https://img.shields.io/badge/skills-17-green)
 ![ROS](https://img.shields.io/badge/ROS1%20%2B%20ROS2-supported-orange)
 ![Agent Format](https://img.shields.io/badge/format-SKILL.md-purple)
 
@@ -152,6 +152,8 @@ cp -R skills/robotics-testing /path/to/your/robot/.claude/skills/
 | Production robot | `ros2`, `robot-bringup`, `robotics-security`, `robotics-testing` |
 | Web dashboard | `ros2`, `ros2-web-integration`, `robotics-security`, `robot-bringup` |
 | ROS1 maintenance | `ros1`, `robotics-software-principles`, `robotics-testing` |
+| Robot learning on LeRobot hardware | `lerobot`, `imitation-learning`, `robot-data-quality`, `robot-app-harness` |
+| RL in simulation | `robot-reinforcement-learning`, `mujoco` or `isaac-sim`, `robotics-testing` |
 
 ## Skills
 
@@ -166,6 +168,12 @@ cp -R skills/robotics-testing /path/to/your/robot/.claude/skills/
 | [docker-ros2-development](skills/docker-ros2-development/SKILL.md) | Docker + ROS2 | Multi-stage Dockerfiles, compose, DDS across containers, GPU passthrough, devcontainers |
 | [ros2-web-integration](skills/ros2-web-integration/SKILL.md) | Web integration | rosbridge, FastAPI/Flask bridges, WebSocket streaming, REST APIs, MJPEG/WebRTC, security |
 | [robot-bringup](skills/robot-bringup/SKILL.md) | System bringup | systemd services, launch composition, udev rules, watchdogs, log rotation, graceful shutdown |
+| [lerobot](skills/lerobot/SKILL.md) | Hugging Face LeRobot | SO-101 bring-up, calibration, teleop, recording, LeRobotDataset, training and deploying policies |
+| [robot-data-quality](skills/robot-data-quality/SKILL.md) | Dataset quality | Episode QA, sync and frame drops, idle frames, coverage, format conversion and inspection with forge |
+| [imitation-learning](skills/imitation-learning/SKILL.md) | Imitation learning | Demo collection, action chunking, ACT, Diffusion Policy, VLAs, honest evaluation, deployment |
+| [robot-reinforcement-learning](skills/robot-reinforcement-learning/SKILL.md) | Reinforcement learning | MDP and reward design, PPO/SAC, parallel sim training, sim-to-real, real-world RL, debugging |
+| [mujoco](skills/mujoco/SKILL.md) | MuJoCo simulation | MJCF modelling, contacts and stability, rendering, MJX and Playground, Menagerie |
+| [isaac-sim](skills/isaac-sim/SKILL.md) | NVIDIA Isaac Sim and Isaac Lab | USD assets, URDF import, Isaac Lab environments, parallel training, tiled cameras, Mimic |
 | [robot-app-harness](skills/robot-app-harness/SKILL.md) | Closed-loop app development | Probing rigs, device drivers, running in simulation, reading evaluator reports, held-out verification |
 | [robotics-security](skills/robotics-security/SKILL.md) | Security and hardening | SROS2, DDS encryption, network segmentation, secrets management, e-stop isolation, secure boot |
 
@@ -235,6 +243,9 @@ Robot System Architecture
 ├── System Bringup ------ robot-bringup/ (systemd, udev, watchdogs, boot sequence)
 ├── Security ------------ robotics-security/ (SROS2, hardening, e-stop isolation)
 ├── Deployment ---------- ros2/ (production checklist, CI/CD)
+├── Robot Learning ------ imitation-learning/, robot-reinforcement-learning/, lerobot/
+├── Data ---------------- robot-data-quality/ (episode QA, formats, forge)
+├── Simulation ---------- mujoco/, isaac-sim/
 └── Closed-Loop Dev ----- robot-app-harness/ + harness/ (probe, write, simulate, verify)
 ```
 
@@ -247,10 +258,10 @@ High-impact skills to add next:
 - `robot-navigation/` - Nav2, SLAM, localization, costmaps, planners, recovery behaviors.
 - `robot-manipulation/` - MoveIt2, grasp planning, planning scenes, TF, pick-and-place.
 - `ros2-control/` - hardware interfaces, controllers, update loops, real-time pitfalls.
-- `robot-simulation/` - Gazebo, Isaac Sim, MuJoCo, sim clock, resets, domain randomization.
+- `gazebo/` - Gazebo with ROS 2, sim clock, resets, sensors (MuJoCo and Isaac Sim now have skills).
 - `robot-description/` - URDF, Xacro, inertials, collision meshes, robot_state_publisher.
 - `robot-debugging/` - ros2 doctor, rqt, tracing, rosbag replay, diagnostics.
-- `robotics-data-pipelines/` - RLDS, LeRobot, Zarr, dataset curation, format conversion.
+- `robot-learning-deployment/` - on-robot inference, latency budgets, async execution, model serving.
 - `multi-robot-systems/` - namespaces, fleets, DDS partitions, task allocation.
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the skill format

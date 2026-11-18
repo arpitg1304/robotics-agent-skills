@@ -28,6 +28,11 @@ evaluator you cannot argue with.
 It does not replace the domain skills. Load `robotics-software-principles` for structure and
 `robotics-testing` when the code needs its own tests.
 
+The harness drives scripted applications against a simulated rig today. Learned policies and
+real hardware are separate skills: `lerobot` for the SO-101 and its datasets, `imitation-learning`
+and `robot-reinforcement-learning` for training policies, `robot-data-quality` for auditing
+demonstrations, and `mujoco` or `isaac-sim` for other simulators.
+
 ## Setup
 
 The harness lives in `harness/` of the robotics-agent-skills repository. `rah` below means

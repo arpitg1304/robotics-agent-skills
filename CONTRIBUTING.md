@@ -55,6 +55,20 @@ It also warns when a `SKILL.md` exceeds 1,000 lines. That is a budget, not an er
 that size a skill costs a lot of context every time it triggers, and the detail is better
 placed in a `references/` file the agent loads only when it needs it.
 
+## Harness Changes
+
+`harness/` has its own tests. The backend tests need an
+[ARMATURE](https://github.com/arpitg1304/armature) checkout with `npm ci` run and
+`ARMATURE_HOME` pointing at it; without one they are skipped.
+
+```bash
+cd harness && python3 -m unittest discover -s tests
+```
+
+A new backend is any executable that speaks the protocol in
+[harness/README.md](harness/README.md). The evaluator belongs in the backend: nothing an
+application can read may carry ground truth.
+
 ## Review Checklist
 
 Before opening a PR:

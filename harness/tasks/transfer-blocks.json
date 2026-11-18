@@ -1,0 +1,32 @@
+{
+  "name": "transfer-blocks",
+  "instruction": "Three blocks start in a row at randomized positions. Move each block to its matching target, release it, and retract the arm so the blocks rest untouched.",
+  "scene": {
+    "task": "transfer",
+    "object": "blocks",
+    "objectCount": 3,
+    "randomize": true,
+    "maxSteps": 1800
+  },
+  "seeds": {
+    "dev": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "held_out": [
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109,
+      110
+    ]
+  }
+}

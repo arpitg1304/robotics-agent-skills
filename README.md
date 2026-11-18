@@ -8,9 +8,15 @@ safer nodes, correct QoS, lifecycle patterns, tests, launch files, Docker, bring
 perception, and security.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-![Skills](https://img.shields.io/badge/skills-10-green)
+![Skills](https://img.shields.io/badge/skills-11-green)
 ![ROS](https://img.shields.io/badge/ROS1%20%2B%20ROS2-supported-orange)
 ![Agent Format](https://img.shields.io/badge/format-SKILL.md-purple)
+
+## Two Parts
+
+- **Skills** (`skills/`): robotics engineering knowledge an agent loads as context. Stable.
+- **Harness** (`harness/`): a closed loop in which an agent writes robot application code
+  against a rig, runs it in a simulator and iterates on an evaluator report. Experimental.
 
 ## Why This Exists
 
@@ -41,6 +47,26 @@ decisions the skills push toward, not as a benchmark. Caveats and the known buil
 defects in both artifacts are documented in the report.
 
 Full report: [evals/EVAL_REPORT.md](evals/EVAL_REPORT.md)
+
+## Agent Harness (Experimental)
+
+Knowledge makes an agent write better robot code. It does not tell the agent whether the
+code works. The harness adds that: pick a robot and its peripherals, describe a task, and
+the agent probes the devices, writes drivers and task code, runs it in simulation, and
+iterates until it passes seeds it has not tuned against.
+
+```bash
+export ARMATURE_HOME=/path/to/armature        # https://github.com/arpitg1304/armature, after `npm ci`
+cd harness
+bin/rah probe  --rig rigs/armature-panda-bench.json
+bin/rah run    --rig rigs/armature-panda-bench.json --task tasks/stack-blocks.json --app examples/pick_place/app.py
+bin/rah verify --rig rigs/armature-panda-bench.json --task tasks/stack-blocks.json --app examples/pick_place/app.py
+```
+
+The first backend is the [ARMATURE](https://github.com/arpitg1304/armature) simulator, run
+headlessly. Its arm motion is kinematic, so passing there shows that the logic and the
+sensor integration are sound, not that the code transfers to hardware. Design, protocol,
+measured results and what is not built yet: [harness/README.md](harness/README.md).
 
 ## Quick Start
 
@@ -88,6 +114,7 @@ cp -R skills/robotics-testing /path/to/your/robot/.claude/skills/
 | [docker-ros2-development](skills/docker-ros2-development/SKILL.md) | Docker + ROS2 | Multi-stage Dockerfiles, compose, DDS across containers, GPU passthrough, devcontainers |
 | [ros2-web-integration](skills/ros2-web-integration/SKILL.md) | Web integration | rosbridge, FastAPI/Flask bridges, WebSocket streaming, REST APIs, MJPEG/WebRTC, security |
 | [robot-bringup](skills/robot-bringup/SKILL.md) | System bringup | systemd services, launch composition, udev rules, watchdogs, log rotation, graceful shutdown |
+| [robot-app-harness](skills/robot-app-harness/SKILL.md) | Closed-loop app development | Probing rigs, device drivers, running in simulation, reading evaluator reports, held-out verification |
 | [robotics-security](skills/robotics-security/SKILL.md) | Security and hardening | SROS2, DDS encryption, network segmentation, secrets management, e-stop isolation, secure boot |
 
 ## How Agents Use These Skills
@@ -155,7 +182,8 @@ Robot System Architecture
 ├── Web Interfaces ------ ros2-web-integration/ (REST, WebSocket, streaming, dashboards)
 ├── System Bringup ------ robot-bringup/ (systemd, udev, watchdogs, boot sequence)
 ├── Security ------------ robotics-security/ (SROS2, hardening, e-stop isolation)
-└── Deployment ---------- ros2/ (production checklist, CI/CD)
+├── Deployment ---------- ros2/ (production checklist, CI/CD)
+└── Closed-Loop Dev ----- robot-app-harness/ + harness/ (probe, write, simulate, verify)
 ```
 
 ## Roadmap

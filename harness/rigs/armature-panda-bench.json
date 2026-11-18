@@ -1,0 +1,43 @@
+{
+  "name": "armature-panda-bench",
+  "description": "Franka Panda on the standard bench with a side-mounted object tracker.",
+  "backend": {
+    "type": "armature"
+  },
+  "robot": "panda",
+  "peripherals": {
+    "tracker": {
+      "type": "object_tracker",
+      "rate_hz": 15,
+      "noise_m": 0.001,
+      "mount": {
+        "xyz": [
+          0.6,
+          0.5,
+          0.4
+        ],
+        "rpy": [
+          0.0,
+          0.7853981633974483,
+          0.0
+        ]
+      }
+    }
+  },
+  "safety": {
+    "workspace": {
+      "frame": "world",
+      "applies_to": "tcp",
+      "min": [
+        -0.3,
+        0.0,
+        -0.5
+      ],
+      "max": [
+        0.6,
+        0.7,
+        0.5
+      ]
+    }
+  }
+}

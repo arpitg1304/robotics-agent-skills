@@ -31,6 +31,9 @@ install/
 log/
 build/
 
+# Harness run outputs
+runs/
+
 # Jupyter
 .ipynb_checkpoints/
 

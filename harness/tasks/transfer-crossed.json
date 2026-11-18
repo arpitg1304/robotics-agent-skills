@@ -1,0 +1,49 @@
+{
+  "name": "transfer-crossed",
+  "instruction": "Three blocks start in a row at randomized positions. Place them on the targets in reverse order: object_0 on target_2, object_1 on target_1, object_2 on target_0. Release each block and retract the arm.",
+  "scene": {
+    "task": "transfer",
+    "object": "blocks",
+    "objectCount": 3,
+    "randomize": true,
+    "maxSteps": 1800
+  },
+  "goal": [
+    {
+      "rel": "at",
+      "a": "object_0",
+      "b": "target_2"
+    },
+    {
+      "rel": "at",
+      "a": "object_1",
+      "b": "target_1"
+    },
+    {
+      "rel": "at",
+      "a": "object_2",
+      "b": "target_0"
+    }
+  ],
+  "seeds": {
+    "dev": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "held_out": [
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109,
+      110
+    ]
+  }
+}

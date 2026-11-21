@@ -13,6 +13,7 @@ application code, run it in simulation, and iterate until it passes held-out tri
 ![Skills](https://img.shields.io/badge/skills-17-green)
 ![ROS](https://img.shields.io/badge/ROS1%20%2B%20ROS2-supported-orange)
 ![Agent Format](https://img.shields.io/badge/format-SKILL.md-purple)
+[![Install with AIPM](https://www.aipm-registry.com/install-with-aipm.svg)](https://www.aipm-registry.com/skills/arpitg1304/ros2/1.0.0?utm_source=github&utm_medium=readme&utm_campaign=package_badge)
 
 ## Two Parts
 
